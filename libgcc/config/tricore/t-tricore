@@ -1,0 +1,17 @@
+LIB1ASMSRC = tricore/lib1funcs.S
+LIB1ASMFUNCS = \
+	_divmodsi4 \
+	_udivmodsi4 \
+	_rstcntxt \
+	_bswapsi2 \
+	_fixsfsi \
+	_fixunssfsi \
+	_paritysi2 \
+	_ashldi3 \
+	_ashrdi3 \
+	_lshrdi3 \
+	memcpy \
+	memset \
+	memcmp
+
+EXTRA_PARTS = crtbegin.o crtend.o crti.o crtn.o
