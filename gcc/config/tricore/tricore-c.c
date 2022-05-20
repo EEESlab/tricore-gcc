@@ -16,26 +16,12 @@
    <http://www.gnu.org/licenses/>.  */
 
 /* Subroutines for the C front end of TriCore */
-/*
-#include "config.h"
-#include "system.h"
-#include "coretypes.h"
-#include "input.h"
-#include "tm.h"
-#include "c-family/c-pragma.h"
-#include "target.h"
-#include "c-family/c-common.h"
-*/
 
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
-#include "input.h"
-#include "tm.h"
-#include "tm_p.h"
 #include "tree.h"
 #include "c-family/c-pragma.h"
-#include "toplev.h"
 #include "output.h"
 #include "target.h"
 #include "c-family/c-common.h"

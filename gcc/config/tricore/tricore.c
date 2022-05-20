@@ -14,7 +14,7 @@ License for more details.
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING3.  If not see
 <http://www.gnu.org/licenses/>.  */
-#if 1
+
 #define IN_TARGET_CODE 1
 
 #include "config.h"
@@ -25,7 +25,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "rtl.h"
 #include "tree.h"
 #include "memmodel.h"
-#include "gimple.h"
 #include "cfghooks.h"
 #include "df.h"
 #include "tm_p.h"
@@ -46,88 +45,21 @@ along with GCC; see the file COPYING3.  If not see
 #include "calls.h"
 #include "explow.h"
 #include "expr.h"
-#include "libfuncs.h"
 #include "reload.h"
 #include "common/common-target.h"
 #include "langhooks.h"
 #include "cfgrtl.h"
 #include "cfganal.h"
-#include "sched-int.h"
-#include "gimplify.h"
-#include "target-globals.h"
 #include "tree-pass.h"
 #include "context.h"
 #include "builtins.h"
 #include "tm-constrs.h"
 #include "rtl-iter.h"
-#include "version.h"
 #include "print-rtl.h"
-
-
-#endif
-
-
-#if 0
-#define IN_TARGET_CODE 1
-
-#include "config.h"
-#define INCLUDE_STRING
-#include "system.h"
-#include "coretypes.h"
-#include "backend.h"
-#include "target.h"
-#include "rtl.h"
-#include "tree.h"
-#include "tree-pass.h"	/* for current_pass */
-#include "memmodel.h"
-#include "cfghooks.h"
-#include "df.h"
-#include "tm_p.h"
-#include "stringpool.h"
-#include "attribs.h"
-#include "optabs.h"
-#include "regs.h"
-#include "output.h"
-#include "emit-rtl.h"
-#include "recog.h"
-#include "addresses.h"
-#include "cgraph.h"
-#include "diagnostic-core.h"
-#include "alias.h"
-#include "fold-const.h"
-#include "stor-layout.h"
-#include "calls.h"
-#include "varasm.h"
-#include "output.h"
-#include "insn-attr.h"
-#include "flags.h"
-#include "reload.h"
-#include "explow.h"
-#include "expr.h"
-#include "cfgrtl.h"
-#include "sched-int.h"
-#include "common/common-target.h"
-#include "langhooks.h"
-#include "intl.h"
-#include "libfuncs.h"
-#include "params.h"
-#include "opts.h"
-#include "dumpfile.h"
-#include "target-globals.h"
-#include "builtins.h"
-#include "tm-constrs.h"
-#include "rtl-iter.h"
-#include "optabs-libfuncs.h"
-#include "gimplify.h"
-#include "gimple.h"
-#include "cfganal.h"
-#include "selftest.h"
-#include "print-rtl.h"
-#include "print-tree.h"
-#endif
 
 /* This file should be included last.  */
 #include "target-def.h"
+
 /* Tokens for the machine specific attributes we support */
 #define TRIC_ATTR_ABSOLUTE           "absdata"
 #define TRIC_ATTR_INDIRECT           "fardata"
@@ -137,6 +69,7 @@ along with GCC; see the file COPYING3.  If not see
 #define TRIC_ATTR_PXHNDCALL          "pxhndcall"
 #define TRIC_ATTR_LONGCALL           "longcall"
 #define TRIC_ATTR_ASECTION              "asection"
+
 /* Addresses that have their 12 MSBs set can be loaded/stored
    by one single instruction. */
 #define TRIC_ABSOLUTE_INT_ADDRESS_P(X) \
@@ -1843,7 +1776,7 @@ tric_const_anchor_bb (basic_block bb, hreg_vals_t *hregs)
 
       // Invalidate all registers set or changed or clobbered by this insn.
       hr_known &= ~ hr_set;
-/*
+/* CHECK
       if (mode != VOIDmode)
         {
           // If this insn sets DEST to a value known at compile time

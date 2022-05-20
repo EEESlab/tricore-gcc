@@ -19,8 +19,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "coretypes.h"
 #include "tm.h"
 #include "diagnostic.h"
-#include <stdlib.h>
-
 
 /* Implement extra spec function `device_to_startfile' */
 /* Device and core are already set by tric_self_specs.  */

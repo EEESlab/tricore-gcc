@@ -20,7 +20,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "coretypes.h"
 #include "tm.h"
 #include "diagnostic.h"
-#include <stdlib.h>
 
 #define STREQ(A, B) (0 == strcmp (A, B))
 

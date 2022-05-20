@@ -17,24 +17,16 @@ You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING3.  If not see
 <http://www.gnu.org/licenses/>.  */
 
-
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
-#include "diagnostic.h"
 #include "tm.h"
-#include "memmodel.h"
-#include "tm_p.h"
 #include "rtl.h"
 #include "tree.h"
-#include "langhooks.h"
 #include "common/common-target.h"
 #include "common/common-target-def.h"
 #include "opts.h"
-#include "flags.h"
-#include "sbitmap.h"
 #include "diagnostic.h"
-#include <algorithm>
 
 
 int tric_zdata_max;
