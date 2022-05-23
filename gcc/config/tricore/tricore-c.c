@@ -17,6 +17,8 @@
 
 /* Subroutines for the C front end of TriCore */
 
+#define IN_TARGET_CODE 1
+
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
