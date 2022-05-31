@@ -4029,7 +4029,7 @@ skip_loop:;
   })
 
 
-(define_expand "movmemsi"
+(define_expand "cpymemsi"
   [(parallel [(set (match_operand:BLK 0 "memory_operand" "")
                    (unspec:BLK [(match_operand:BLK 1 "memory_operand" "")
                                 ] UNSPEC_MOVMEM))
@@ -4074,11 +4074,11 @@ skip_loop:;
     operands[3] = GEN_INT (chunk);
   })
 
-;; "*movmemsi.qi"
-;; "*movmemsi.hi"
-;; "*movmemsi.si"
-;; "*movmemsi.di"
-(define_insn "*movmemsi.<mode>"
+;; "*cpymemsi.qi"
+;; "*cpymemsi.hi"
+;; "*cpymemsi.si"
+;; "*cpymemsi.di"
+(define_insn "*cpymemsi.<mode>"
   [(set (mem:BLK (match_operand:SI 0 "register_operand"               "a,a"))    ;; dest
         (unspec:BLK [(mem:BLK (match_operand:SI 1 "register_operand"  "a,a"))    ;; src
                      ] UNSPEC_MOVMEM))
