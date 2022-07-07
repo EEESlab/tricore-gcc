@@ -292,7 +292,7 @@
 
 ;; Insns to load HIGH and LO_SUM
 (define_insn "movsi_high"
-  [(set (match_operand:SI 0 "register_operand"            "=*d,*a")
+  [(set (match_operand:SI 0 "register_operand"            "=*d,a")
         (high:SI (match_operand:SI 1 "immediate_operand"   "i ,i ")))]
   ""
   "@
@@ -301,7 +301,7 @@
   [(set_attr "pipe" "ip,aalu")])
 
 (define_insn "addsi_low"
-  [(set (match_operand:SI 0 "register_operand"             "=*d,*d,*a")
+  [(set (match_operand:SI 0 "register_operand"             "=*d,*d,a")
         (lo_sum:SI (match_operand:SI 1 "register_operand"   "0 ,d ,a")
                    (match_operand:SI 2 "immediate_operand"  "n ,i ,i")))]
   ""

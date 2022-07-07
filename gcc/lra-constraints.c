@@ -1219,6 +1219,8 @@ reg_class_from_constraints (const char *p)
 static inline enum reg_class
 get_op_class (rtx op)
 {
+  if (SUBREG_P (op))
+    op = SUBREG_REG(op);
   return REG_P (op) ? get_reg_class (REGNO (op)) : NO_REGS;
 }
 

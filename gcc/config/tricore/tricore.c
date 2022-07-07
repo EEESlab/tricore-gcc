@@ -5645,6 +5645,9 @@ static int
 tric_register_move_cost (enum machine_mode mode,
                          reg_class_t class1, reg_class_t class2)
 {
+
+/* TODO Verify the impact on performance */
+	
   if (reg_class_subset_p (class1, REGCLASS_A)
       && reg_class_subset_p (class2, REGCLASS_A))
     return 2 * tric_hard_regno_nregs (0, mode);
@@ -5656,11 +5659,11 @@ tric_register_move_cost (enum machine_mode mode,
         {
           return tric_hard_regno_nregs (0, mode);
         }
-      
       return 2 * tric_hard_regno_nregs (0, mode);
     }
+
+  return GET_MODE_SIZE (mode) > 64 ? 8 : 2;
   
-  return 8 * tric_hard_regno_nregs (0, mode);
 }
 
 
@@ -10274,7 +10277,7 @@ return false;
 /*testsuite/gcc.c-torture/execute/stkalign.c fails as well */
 /*I made some investigations with real benchmark code and lra is a little be worse then without */
 #undef TARGET_LRA_P
-#define TARGET_LRA_P hook_bool_void_false
+#define TARGET_LRA_P hook_bool_void_true
 
 
 #undef TARGET_HARD_REGNO_NREGS
