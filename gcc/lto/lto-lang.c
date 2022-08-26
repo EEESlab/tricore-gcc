@@ -1300,8 +1300,8 @@ lto_init (void)
   flag_generate_lto = (flag_incremental_link == INCREMENTAL_LINK_LTO
 		       || flag_wpa != NULL);
 
-  /* Create the basic integer types.  */
-  build_common_tree_nodes (flag_signed_char);
+  /* Create the basic integer types. */
+  build_common_tree_nodes (flag_signed_char, flag_short_double);
 
   /* The global tree for the main identifier is filled in by
      language-specific front-end initialization that is not run in the

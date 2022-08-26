@@ -379,9 +379,10 @@ d_init (void)
 
   /* This allows the code in d-builtins.cc to not have to worry about
      converting (C signed char *) to (D char *) for string arguments of
-     built-in functions.  The parameter (signed_char = false) specifies
-     whether char is signed.  */
-  build_common_tree_nodes (false);
+     built-in functions.  The first parameter (signed_char = false) specifies
+     whether char is signed.  The second parameter (short_double = false) specifies
+     whether double is 32-bit. */
+  build_common_tree_nodes (false, false);
 
   d_init_builtins ();
 

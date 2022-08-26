@@ -10219,11 +10219,12 @@ const floatn_type_info floatn_nx_types[NUM_FLOATN_NX_TYPES] =
   };
 
 
-/* Create nodes for all integer types (and error_mark_node) using the sizes
-   of C datatypes.  SIGNED_CHAR specifies whether char is signed.  */
+/* Create nodes for all primitives types (and error_mark_node) using the sizes
+   of C datatypes.  SIGNED_CHAR specifies whether char is signed.
+   SHORT_DOUBLE specifies whether double is mapped on float. */
 
 void
-build_common_tree_nodes (bool signed_char)
+build_common_tree_nodes (bool signed_char, bool short_double)
 {
   int i;
 
@@ -10411,7 +10412,10 @@ build_common_tree_nodes (bool signed_char)
   layout_type (float_type_node);
 
   double_type_node = make_node (REAL_TYPE);
-  TYPE_PRECISION (double_type_node) = DOUBLE_TYPE_SIZE;
+  if (short_double)
+    TYPE_PRECISION (double_type_node) = FLOAT_TYPE_SIZE;
+  else
+    TYPE_PRECISION (double_type_node) = DOUBLE_TYPE_SIZE;  
   layout_type (double_type_node);
 
   long_double_type_node = make_node (REAL_TYPE);

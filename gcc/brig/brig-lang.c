@@ -889,7 +889,7 @@ brig_build_c_type_nodes (void)
 static bool
 brig_langhook_init (void)
 {
-  build_common_tree_nodes (false);
+  build_common_tree_nodes (false, false);
 
   /* Builtin initialization related code borrowed from lto-lang.c.  */
   void_list_node = build_tree_list (NULL_TREE, void_type_node);

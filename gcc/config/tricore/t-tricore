@@ -43,8 +43,8 @@ install-devices: installdirs $(MEMORY_CPU) $(CRT0_CPU) $(CRT0_S) crti.S crtn.S
 	$(INSTALL_DATA) crt0-tc1x.S $(DESTDIR)$(libsubdir)
 	$(INSTALL_DATA) crt0-tc2x.S $(DESTDIR)$(libsubdir)
 
-MULTILIB_OPTIONS = mtc131/mtc16/mtc161/mtc162 #fshort-double
-MULTILIB_DIRNAMES = tc131 tc16 tc161 tc162 #short-double
+MULTILIB_OPTIONS = mtc131/mtc16/mtc161/mtc162 fshort-double
+MULTILIB_DIRNAMES = tc131 tc16 tc161 tc162 short-double
 #MULTILIB_OPTIONS = mtc161 fshort-double
 #MULTILIB_DIRNAMES = tc161 short-double
 

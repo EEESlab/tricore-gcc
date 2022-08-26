@@ -356,7 +356,7 @@ gnat_init (void)
 {
   /* Do little here, most of the standard declarations are set up after the
      front-end has been run.  Use the same `char' as C for Interfaces.C.  */
-  build_common_tree_nodes (flag_signed_char);
+  build_common_tree_nodes (flag_signed_char, flag_short_double);
 
   /* In Ada, we use an unsigned 8-bit type for the default boolean type.  */
   boolean_type_node = make_unsigned_type (8);
