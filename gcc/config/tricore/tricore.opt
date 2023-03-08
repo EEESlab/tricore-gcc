@@ -115,7 +115,7 @@ Target Joined RejectNegative Var(tric_opt_cpu) Init(0) Enum(tric_mcpu)
 
 mtc
 Target Joined RejectNegative Var(tric_opt_tc) Init(0) Enum(tric_mtc)
--mtc<CORE>	Generate code for specific TriCore <CORE> architecture:  V1.3 (default), V1.3.1, V1.6, V1.6.1 or V1.6.2.  This option will be set by -mcpu=<CPU>.
+-mtc<CORE>	Generate code for specific TriCore <CORE> architecture:  V1.3 (default), V1.3.1, V1.6, V1.6.1, V1.6.2 or V1.8.  This option will be set by -mcpu=<CPU>.
 
 mfast-math
 Target Mask(FAST_MATH)
@@ -184,6 +184,9 @@ Enum(tric_mtc) String(161) Value(3)
 EnumValue
 Enum(tric_mtc) String(162) Value(4)
 
+EnumValue
+Enum(tric_mtc) String(18)  Value(5)
+
 Enum
 Name(tric_pipevariant) Type(int)
 Known PIPEVARIANT values:
@@ -193,6 +196,9 @@ Enum(tric_pipevariant) String(standard)  Value(0)
 
 EnumValue
 Enum(tric_pipevariant) String(tc16x)  Value(1)
+
+EnumValue
+Enum(tric_pipevariant) String(tc18x)  Value(2)
 
 mdeb
 Target Undocumented Mask(ALL_DEBUG)

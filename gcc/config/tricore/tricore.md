@@ -49,6 +49,7 @@
    UNSPEC_ADDC
    UNSPEC_ASHR
    UNSPEC_CMP_F
+   UNSPEC_CMP_DF
    UNSPEC_CODE_PIC
    UNSPEC_COPYSIGN
    UNSPEC_DIV_INIT
@@ -91,7 +92,13 @@
    (CMP_F_GT 2)
    (CMP_F_UNORDERED 3)
    (CMP_F_DENORM_A  4)
-   (CMP_F_DENORM_B  5)])
+   (CMP_F_DENORM_B  5)
+   (CMP_DF_LT 0)
+   (CMP_DF_EQ 1)
+   (CMP_DF_GT 2)
+   (CMP_DF_UNORDERED 3)
+   (CMP_DF_DENORM_A  4)
+   (CMP_DF_DENORM_B  5)])
 
 
 ;; Instruction lengths
@@ -153,7 +160,7 @@
 ;; Flavours of instruction set archirecture, used in enabled attribute
 
 (define_attr "isa" "standard,
-                    tc16, tc161, tc162, tc162up, tc16up,
+                    tc16, tc161, tc162, tc18, tc18up, tc162up, tc16up,
                     tc13, tc131, tc13x,
                     cpu_tc081,no_cpu_tc081"
   (const_string "standard"))
@@ -201,6 +208,14 @@
          
          (and (eq_attr "isa" "tc162up")
               (ne (symbol_ref "TRIC_162UP")  (const_int 0)))
+         (attr "enable_opt")
+
+         (and (eq_attr "isa" "tc18up")
+              (ne (symbol_ref "TRIC_18UP")  (const_int 0)))
+         (attr "enable_opt")
+
+         (and (eq_attr "isa" "tc18")
+              (ne (symbol_ref "TRIC_18")  (const_int 0)))
          (attr "enable_opt")
          
          (and (eq_attr "isa" "tc13x")
@@ -510,6 +525,23 @@
    (set_attr "length" "2,4,4,4,2,2,2,2,4,8")
    (set_attr "adjust" "*,mov16,mov16s,mov16s,*,*,*,*,*,*")])
 
+(define_insn "truncdfsf2"
+  [(set (match_operand:SF 0 "register_operand" "=d")
+        (float_truncate:SF (match_operand:DF 1 "register_operand" "d")))
+   (clobber (reg:SI REG_PSW))]
+  "TRIC_HAVE_DP"
+  "dftof\t%0, %A1"
+  [(set_attr "pipe"   "fp")
+   (set_attr "length" "4")])
+
+(define_insn "extendsfdf2"
+  [(set (match_operand:DF 0 "register_operand" "=d")
+        (float_extend:DF (match_operand:SF 1 "register_operand" "d")))
+   (clobber (reg:SI REG_PSW))]
+  "TRIC_HAVE_DP"
+  "ftodf\t%A0, %1"
+  [(set_attr "pipe"   "fp")
+   (set_attr "length" "4")])
 
 (define_insn "truncsfhf2"
   [(set (match_operand:HF 0 "register_operand" "=d")
@@ -864,15 +896,17 @@
 ;; "*movdf_insn"
 ;; "*movpdi_insn"
 (define_insn_and_split "*mov<mode>_insn"
-  [(set (match_operand:DIPDIDF 0 "nonimmediate_operand" "=d,d ,m,m ,d,a ,d  ,d  ,d   ,d  ,a,*!???d,*!???a ,da")
-        (match_operand:DIPDIDF 1 "general_operand"       "d,d ,d,a ,m,m ,Ksg,Ksg,G00 ,Kug,a,a     ,d      ,n E"))]
+  [(set (match_operand:TIDIPDIDF 0 "nonimmediate_operand" "=d,d ,m,m,m ,d,d,a ,d  ,d  ,d   ,d  ,a,*!???d,*!???a ,da")
+        (match_operand:TIDIPDIDF 1 "general_operand"       "d,d ,d,d,a ,m,m,m ,Ksg,Ksg,G00 ,Kug,a,a     ,d      ,n E"))]
   "tric_mov_operands (operands, <MODE>mode)"
   "@
     #
     mov\t%A0, %H1, %L1
     st.d\t%0, %A1
+    st.dd\t%0, %Q1
     st.da\t%0, %A1
     ld.d\t%A0, %1
+    ld.dd\t%Q0, %1
     ld.da\t%A0, %1
     #
     mov\t%A0, %1
@@ -904,11 +938,11 @@
     operands[4] = simplify_gen_subreg (SImode, operands[1], <MODE>mode, 0);
     operands[5] = simplify_gen_subreg (SImode, operands[1], <MODE>mode, 4);
   }
-  [(set_attr "isa" "tc13x,tc16up,*,*,*,*,tc13x,tc16up,tc16up,*,*,*,*,*")
+  [(set_attr "isa" "tc13x,tc16up,*,tc18up,*,*,tc18up,*,tc13x,tc16up,tc16up,*,*,*,*,*")
    (set_attr "ticks" "8")
    (set_attr "space" "12")
-   (set_attr "pipe" "*,ip2,std,sta,ldd,lda,*,ip2,ip2,*,*,*,*,*")
-   (set_attr "adjust" "*,*,*,*,*,*,*,mov64,mov64,*,*,*,*,*")])
+   (set_attr "pipe" "*,ip2,std,std,sta,ldd,ldd,lda,*,ip2,ip2,*,*,*,*,*")
+   (set_attr "adjust" "*,*,*,*,*,*,*,*,*,mov64,mov64,*,*,*,*,*")])
 
 
 (define_expand "imask2"
@@ -2136,6 +2170,47 @@
   "dvadj\t%A0, %A1, %2"
   [(set_attr "pipe" "ip2")])
 
+(define_insn "divdi3"
+  [(set (match_operand:DI 0 "register_operand"         "=d")
+        (div:DI (match_operand:DI 1 "register_operand"  "d")
+                (match_operand:DI 2 "register_operand"  "d")))
+   (clobber (reg:SI REG_PSW))]
+  "TRIC_HAVE_DIV64"
+  "div64\t%A0, %A1, %A2"
+  [(set_attr "pipe" "ip3")])
+
+
+;; DIV64 and MOD64
+
+(define_insn "moddi3"
+  [(set (match_operand:DI 0 "register_operand"         "=d")
+        (mod:DI (match_operand:DI 1 "register_operand"  "d")
+                (match_operand:DI 2 "register_operand"  "d")))
+   (clobber (reg:SI REG_PSW))]
+  "TRIC_HAVE_DIV64"
+  "rem64\t%A0, %A1, %A2"
+  [(set_attr "pipe" "ip3")])
+
+(define_insn "udivdi3"
+  [(set (match_operand:DI 0 "register_operand"          "=d")
+        (udiv:DI (match_operand:DI 1 "register_operand"  "d")
+                 (match_operand:DI 2 "register_operand"  "d")))
+   (clobber (reg:SI REG_PSW))]
+  "TRIC_HAVE_DIV64"
+  "div64.u\t%A0, %A1, %A2"
+  [(set_attr "pipe" "ip3")])
+
+(define_insn "umoddi3"
+  [(set (match_operand:DI 0 "register_operand"          "=d")
+        (umod:DI (match_operand:DI 1 "register_operand"  "d")
+                 (match_operand:DI 2 "register_operand"  "d")))
+   (clobber (reg:SI REG_PSW))]
+  "TRIC_HAVE_DIV64"
+  "rem64.u\t%A0, %A1, %A2"
+  [(set_attr "pipe" "ip3")])
+
+
+;; Floating-point arithmetic
 
 (define_insn "addsf3"
   [(set (match_operand:SF 0 "register_operand"          "=d")
@@ -2144,6 +2219,15 @@
    (clobber (reg:SI REG_PSW))]
   ""
   "add.f\t%0, %1, %2"
+  [(set_attr "pipe" "fp2")])
+
+(define_insn "adddf3"
+  [(set (match_operand:DF 0 "register_operand"          "=d")
+        (plus:DF (match_operand:DF 1 "register_operand"  "d")
+                 (match_operand:DF 2 "register_operand"  "d")))
+   (clobber (reg:SI REG_PSW))]
+  "TRIC_HAVE_DP"
+  "add.df\t%A0, %A1, %A2"
   [(set_attr "pipe" "fp2")])
 
 (define_insn "subsf3"
@@ -2155,6 +2239,15 @@
   "sub.f\t%0, %1, %2"
   [(set_attr "pipe" "fp2")])
 
+(define_insn "subdf3"
+  [(set (match_operand:DF 0 "register_operand"           "=d")
+        (minus:DF (match_operand:DF 1 "register_operand"  "d")
+                  (match_operand:DF 2 "register_operand"  "d")))
+   (clobber (reg:SI REG_PSW))]
+  "TRIC_HAVE_DP"
+  "sub.df\t%A0, %A1, %A2"
+  [(set_attr "pipe" "fp2")])
+
 (define_insn "divsf3"
   [(set (match_operand:SF 0 "register_operand"         "=d")
         (div:SF (match_operand:SF 1 "register_operand"  "d")
@@ -2162,6 +2255,15 @@
    (clobber (reg:SI REG_PSW))]
   ""
   "div.f\t%0, %1, %2"
+  [(set_attr "pipe" "fpdiv")])
+
+(define_insn "divdf3"
+  [(set (match_operand:DF 0 "register_operand"         "=d")
+        (div:DF (match_operand:DF 1 "register_operand"  "d")
+                (match_operand:DF 2 "register_operand"  "d")))
+   (clobber (reg:SI REG_PSW))]
+  "TRIC_HAVE_DP"
+  "div.df\t%A0, %A1, %A2"
   [(set_attr "pipe" "fpdiv")])
 
 (define_insn "mulsf3"
@@ -2173,16 +2275,56 @@
   "mul.f\t%0, %1, %2"
   [(set_attr "pipe" "fp2")])
 
+(define_insn "muldf3"
+  [(set (match_operand:DF 0 "register_operand"          "=d")
+        (mult:DF (match_operand:DF 1 "register_operand"  "d")
+                 (match_operand:DF 2 "register_operand"  "d")))
+   (clobber (reg:SI REG_PSW))]
+  "TRIC_HAVE_DP"
+  "mul.df\t%A0, %A1, %A2"
+  [(set_attr "pipe" "fp2")])
+
 ;; Just the same as optabs would expand it without this insn, but a
 ;; neg:SF is much better to combine, e.g. in fnma.
 (define_insn "negsf2"
   [(set (match_operand:SF 0 "register_operand"         "=d,!*a")
         (neg:SF (match_operand:SF 1 "register_operand"  "d,a")))]
   ""
-  "@
-	addih\t%0, %1, 0x8000
-	addih.a\t%0, %1, 0x8000"
+  {
+    static const char * asmcode[] =
+    {
+      "addih\t%0, %1, 0x8000",
+      "addih.a\t%0, %1, 0x8000",
+      "neg.f\t%0,%1"
+    };
+
+    if (0 == which_alternative)
+      {
+       if (TRIC_18UP) return asmcode[2]; else return asmcode[which_alternative];
+      }
+    if (1 == which_alternative)
+      {
+       return asmcode[which_alternative];
+      }
+    return "";
+  }
   [(set_attr "pipe" "ip,aalu")])
+
+(define_insn "negdf2"
+  [(set (match_operand:DF 0 "register_operand"         "=d")
+        (neg:DF (match_operand:DF 1 "register_operand"  "d")))]
+  "(TRIC_HAVE_DP)"
+  "neg.df\t%A0, %A1"
+  [(set_attr "pipe" "fp2")])
+
+(define_insn "smaxsf3_insn"
+  [(set (match_operand:SF 0 "register_operand" "=d")
+        (smax:SF (match_operand:SF 1 "register_operand" "d")
+                 (match_operand:SF 2 "register_operand" "d")))
+  (clobber (reg:SI REG_PSW))]
+  "(TRIC_18UP)"
+  "max.f %0,%1,%2"
+  [(set_attr "pipe" "fp2")])
 
 (define_expand "smaxsf3"
   [(parallel [(set (match_dup 3)
@@ -2201,9 +2343,36 @@
                          (match_dup 2)))]
   ""
   {
-    operands[3] = gen_reg_rtx (SImode);
-    operands[4] = gen_int_mode (1 << CMP_F_GT, SImode);
+   if (TRIC_18UP)
+      {
+        emit_insn (gen_smaxsf3_insn (operands[0], operands[1],operands[2]));
+        DONE;
+      }
+   else
+      {
+        operands[3] = gen_reg_rtx (SImode);
+        operands[4] = gen_int_mode (1 << CMP_F_GT, SImode);
+      }
   })
+
+
+(define_insn "smaxdf3"
+  [(set (match_operand:DF 0 "register_operand" "=d")
+        (smax:DF (match_operand:DF 1 "register_operand" "d")
+                 (match_operand:DF 2 "register_operand" "d")))
+  (clobber (reg:SI REG_PSW))]
+  "(TRIC_HAVE_DP)"
+  "max.df %A0,%A1,%A2"
+  [(set_attr "pipe" "fp2")])
+
+(define_insn "sminsf3_insn"
+  [(set (match_operand:SF 0 "register_operand" "=d")
+	(smin:SF (match_operand:SF 1 "register_operand" "d")
+		 (match_operand:SF 2 "register_operand" "d")))
+   (clobber (reg:SI REG_PSW))]
+  "(TRIC_18UP)"
+  "min.f %0,%1,%2"
+  [(set_attr "pipe" "fp2")])
 
 (define_expand "sminsf3"
   [(parallel [(set (match_dup 3)
@@ -2222,9 +2391,26 @@
                          (match_dup 2)))]
   ""
   {
-    operands[3] = gen_reg_rtx (SImode);
-    operands[4] = gen_int_mode (1 << CMP_F_GT, SImode);
+   if (TRIC_18UP)
+      {
+        emit_insn (gen_sminsf3_insn (operands[0], operands[1],operands[2]));
+        DONE;
+      }
+   else
+      {
+        operands[3] = gen_reg_rtx (SImode);
+        operands[4] = gen_int_mode (1 << CMP_F_GT, SImode);
+      }
   })
+
+(define_insn "smindf3"
+  [(set (match_operand:DF 0 "register_operand" "=d")
+	(smin:DF (match_operand:DF 1 "register_operand" "d")
+		 (match_operand:DF 2 "register_operand" "d")))
+   (clobber (reg:SI REG_PSW))]
+  "(TRIC_HAVE_DP)"
+  "min.df %A0,%A1,%A2"
+  [(set_attr "pipe" "fp2")])
 
 (define_expand "copysignsf3"
   [(set (match_operand:SF 0 "register_operand" "")
@@ -2268,12 +2454,37 @@
   "cmp.f\t%0, %1, %2"
   [(set_attr "pipe" "fp")])
 
+(define_insn "cmp_df"
+  [(set (match_operand:SI 0 "register_operand"             "=d")
+        (unspec:SI [(match_operand:DF 1 "register_operand"  "d")
+                    (match_operand:DF 2 "register_operand"  "d")] UNSPEC_CMP_DF))
+   (clobber (reg:SI REG_PSW))]
+  "(TRIC_HAVE_DP)"
+  "cmp.df\t%0, %A1, %A2"
+  [(set_attr "pipe" "fp")])
+  
 (define_insn "floatsisf2"
   [(set (match_operand:SF 0 "register_operand"          "=d")
         (float:SF (match_operand:SI 1 "register_operand" "d")))
    (clobber (reg:SI REG_PSW))]
   ""
   "itof\t%0, %1"
+  [(set_attr "pipe" "fp2")])
+
+(define_insn "floatsidf2"
+  [(set (match_operand:DF 0 "register_operand"          "=d")
+        (float:DF (match_operand:SI 1 "register_operand" "d")))
+   (clobber (reg:SI REG_PSW))]
+  "(TRIC_HAVE_DP)"
+  "itodf\t%A0, %1"
+  [(set_attr "pipe" "fp2")])
+
+(define_insn "floatdidf2"
+  [(set (match_operand:DF 0 "register_operand"          "=d")
+        (float:DF (match_operand:DI 1 "register_operand" "d")))
+   (clobber (reg:SI REG_PSW))]
+  "(TRIC_HAVE_DP)"
+  "ltodf\t%A0, %A1"
   [(set_attr "pipe" "fp2")])
 
 (define_insn "floatunssisf2"
@@ -2283,6 +2494,22 @@
   ""
   "utof\t%0, %1"
   [(set_attr "pipe" "fp2")])
+
+(define_insn "floatunssidf2"
+  [(set (match_operand:DF 0 "register_operand"                   "=d")
+        (unsigned_float:DF (match_operand:SI 1 "register_operand" "d")))
+   (clobber (reg:SI REG_PSW))]
+  "(TRIC_HAVE_DP)"
+  "utodf\t%A0, %1"
+  [(set_attr "pipe" "fp2")])
+
+(define_insn "floatunsdidf2"
+  [(set (match_operand:DF 0 "register_operand"                   "=d")
+        (unsigned_float:DF (match_operand:DI 1 "register_operand" "d")))
+   (clobber (reg:SI REG_PSW))]
+  "(TRIC_HAVE_DP)"
+  "ultodf\t%A0, %A1"
+  [(set_attr "pipe" "fp2")])  
 
 (define_expand "fix_truncsfsi2"
   [(set (reg:SF REG_D4)
@@ -2320,6 +2547,22 @@
       }
   })
 
+(define_insn "fix_truncdfdi2"
+  [(set (match_operand:DI 0 "register_operand"         "=d")
+        (fix:DI (match_operand:DF 1 "register_operand"  "d")))
+   (clobber (reg:SI REG_PSW))]
+  "(TRIC_HAVE_DP)"
+  "dftolz\t%A0, %A1"
+  [(set_attr "pipe" "fp2")])
+
+(define_insn "fixuns_truncdfdi2"
+  [(set (match_operand:DI 0 "register_operand"                 "=d")
+        (unsigned_fix:DI (match_operand:DF 1 "register_operand" "d")))
+   (clobber (reg:SI REG_PSW))]
+  "(TRIC_HAVE_DP)"
+  "dftoulz\t%A0, %A1"
+  [(set_attr "pipe" "fp2")])
+  
 (define_insn "fix_truncsfsi2_insn"
   [(set (match_operand:SI 0 "register_operand"         "=d")
         (fix:SI (match_operand:SF 1 "register_operand"  "d")))
@@ -2354,6 +2597,22 @@
   "call\t__fixunssfsi"
   [(set_attr "pipe" "ctx")])
 
+(define_insn "fix_truncdfsi2"
+  [(set (match_operand:SI 0 "register_operand"         "=d")
+        (fix:SI (match_operand:DF 1 "register_operand"  "d")))
+   (clobber (reg:SI REG_PSW))]
+  "TRIC_HAVE_DP"
+  "dftoiz\t%0, %A1"
+  [(set_attr "pipe" "fp2")])
+
+(define_insn "fixuns_truncdfsi2"
+  [(set (match_operand:SI 0 "register_operand"                 "=d")
+        (unsigned_fix:SI (match_operand:DF 1 "register_operand" "d")))
+   (clobber (reg:SI REG_PSW))]
+  "TRIC_HAVE_DP"
+  "dftouz\t%0, %A1"
+  [(set_attr "pipe" "fp2")])
+
 ;; $0 = $3 + $1 * $2
 (define_insn "fmasf4"
   [(set (match_operand:SF 0 "register_operand"          "=d")
@@ -2363,6 +2622,17 @@
    (clobber (reg:SI REG_PSW))]
   "!TRIC_ERRATA_076"
   "madd.f\t%0, %3, %1, %2"
+  [(set_attr "pipe" "fp3")])
+
+;; $0 = $3 + $1 * $2
+(define_insn "fmadf4"
+  [(set (match_operand:DF 0 "register_operand"          "=d")
+        (fma:DF (match_operand:DF 1 "register_operand"   "d")
+                (match_operand:DF 2 "register_operand"   "d")
+                (match_operand:DF 3 "register_operand"   "d")))
+   (clobber (reg:SI REG_PSW))]
+  "TRIC_HAVE_DP"
+  "madd.df\t%A0, %A3, %A1, %A2"
   [(set_attr "pipe" "fp3")])
 
 ;; $0 = $1 * $2 - $3
@@ -2379,6 +2649,20 @@
     operands[4] = gen_reg_rtx (SFmode);
   })
 
+;; $0 = $1 * $2 - $3
+(define_expand "fmsdf4"
+  [(parallel [(set (match_dup 4)
+                   (fma:DF (neg:DF (match_operand:DF 1 "register_operand" ""))
+                           (match_operand:DF 2 "register_operand" "")
+                           (match_operand:DF 3 "register_operand" "")))
+              (clobber (reg:SI REG_PSW))])
+   (set (match_operand:DF 0 "register_operand" "")
+        (neg:DF (match_dup 4)))]
+  "TRIC_HAVE_DP"
+  {
+    operands[4] = gen_reg_rtx (DFmode);
+  })  
+
 ;; $0 = - $1 * $2 + $3
 (define_insn "fnmasf4"
   [(set (match_operand:SF 0 "register_operand"                 "=d")
@@ -2388,6 +2672,17 @@
    (clobber (reg:SI REG_PSW))]
   "!TRIC_ERRATA_076"
   "msub.f\t%0, %3, %1, %2"
+  [(set_attr "pipe" "fp3")])
+
+;; $0 = - $1 * $2 + $3
+(define_insn "fnmadf4"
+  [(set (match_operand:DF 0 "register_operand"                 "=d")
+        (fma:DF (neg:DF (match_operand:DF 1 "register_operand"  "d"))
+                (match_operand:DF 2 "register_operand"          "d")
+                (match_operand:DF 3 "register_operand"          "d")))
+   (clobber (reg:SI REG_PSW))]
+  "TRIC_HAVE_DP"
+  "msub.df\t%A0, %A3, %A1, %A2"
   [(set_attr "pipe" "fp3")])
 
 ;; $0 = - $1 * $2 - $3
@@ -2404,10 +2699,25 @@
     operands[4] = gen_reg_rtx (SFmode);
   })
 
+;; $0 = - $1 * $2 - $3
+(define_expand "fnmsdf4"
+  [(parallel [(set (match_dup 4)
+                   (fma:DF (match_operand:DF 1 "register_operand" "")
+                           (match_operand:DF 2 "register_operand" "")
+                           (match_operand:DF 3 "register_operand" "")))
+              (clobber (reg:SI REG_PSW))])
+   (set (match_operand:DF 0 "register_operand" "")
+        (neg:DF (match_dup 4)))]
+  "TRIC_HAVE_DP"
+  {
+    operands[4] = gen_reg_rtx (DFmode);
+  })
+
 ;; "andsi3_zerox1"
 ;; "iorsi3_zerox1"
 ;; "xorsi3_zerox1"
 ;; This pattern is used in cbranchsf4-expander (for IOR)
+;; This pattern is used in cbranchdf4-expander (for IOR)
 (define_insn "<code>si3_zerox1"
   [(set (match_operand:SI 0 "register_operand"                                  "=d  ")
         (tric_bitop:SI (zero_extract:SI (match_operand:SI 1 "register_operand"   "d  ")
@@ -3272,13 +3582,31 @@
   [(set_attr "pipe" "ip")
    (set_attr "adjust" "sat,sat,*")])
 
-
 (define_insn "abssf2"
   [(set (match_operand:SF 0 "register_operand"          "=d")
         (abs:SF (match_operand:SF 1 "register_operand"   "d")))]
   ""
-  "insert\t%0, %1, 0, 31, 1"
-  [(set_attr "pipe" "ip2")])
+  {
+    static const char * asmcode[] =
+    {
+      "insert\t%0, %1, 0, 31, 1",
+      "abs.f\t%0,%1"
+    };
+    if (0 == which_alternative)
+      {
+       if (TRIC_18UP) return asmcode[1]; else return asmcode[which_alternative];
+      }    
+    return "";
+  }
+  [(set_attr "pipe" "fp2")])
+
+
+(define_insn "absdf2"
+  [(set (match_operand:DF 0 "register_operand"          "=d")
+        (abs:DF (match_operand:DF 1 "register_operand"   "d")))]
+  "(TRIC_HAVE_DP)"
+  "abs.df\t%A0, %A1"
+  [(set_attr "pipe" "fp2")])
 
 (define_insn "nop"
   [(const_int 0)]
@@ -3760,6 +4088,18 @@
     DONE;
   })
 
+(define_expand "cbranchdf4"
+  [(set (pc)
+        (if_then_else (match_operator:SI 0 "tric_dfloat_comparison_operator"
+                                         [(match_operand:DF 1 "register_operand" "")
+                                          (match_operand:DF 2 "register_operand" "")])
+                      (label_ref (match_operand 3 "" ""))
+                      (pc)))]
+  "(TRIC_HAVE_DP)"
+  {
+    tric_emit_cbranchdf4 (operands);
+    DONE;
+  })
 
 (define_insn "clzsi2"
   [(set (match_operand:SI 0 "register_operand"          "=d")
@@ -3884,6 +4224,8 @@
     enum machine_mode mode = tric_mode_for_align (OPVAL(3), operands[1]);
     int usize = GET_MODE_SIZE (mode);
 
+    if (TImode == mode) FAIL; /* TRIC_18UP ignore TImode setmem, main reason is to load the clobber as 128bit needs some extensions */
+    
     operands[3] = GEN_INT (usize);
     operands[4] = const0_rtx;
     operands[5] = gen_rtx_SCRATCH (mode);
@@ -4074,10 +4416,18 @@ skip_loop:;
     operands[3] = GEN_INT (chunk);
   })
 
+(define_mode_attr cpymem_clobber
+  [(QI "&d ,&d")
+   (HI "&d ,&d")
+   (SI "&d ,&d")
+   (DI "&d ,&d")
+   (TI "&d ,&d")])
+
 ;; "*cpymemsi.qi"
 ;; "*cpymemsi.hi"
 ;; "*cpymemsi.si"
 ;; "*cpymemsi.di"
+;; "*cpymemsi.ti"
 (define_insn "*cpymemsi.<mode>"
   [(set (mem:BLK (match_operand:SI 0 "register_operand"               "a,a"))    ;; dest
         (unspec:BLK [(mem:BLK (match_operand:SI 1 "register_operand"  "a,a"))    ;; src
@@ -4088,7 +4438,7 @@ skip_loop:;
    (clobber (match_scratch:SI 7                                      "=0,0"))    ;; & dest
    (clobber (match_scratch:SI 8                                      "=1,1"))    ;; & src
    (clobber (match_scratch:SI 4                                      "=2,&a"))   ;; loop counter
-   (clobber (match_operand:QIHISIDI 5 "register_operand"             "=&d,&d"))] ;; clobber register
+   (clobber (match_operand:QIHISIDITI 5 "register_operand"           "=<cpymem_clobber>"))] ;; clobber register
   ""
   {
     int same_addr = REGNO (operands[0]) == REGNO (operands[1]);
@@ -4099,7 +4449,6 @@ skip_loop:;
     output_asm_insn (ASM_COMMENT_START " #chunks=%2, chunksize=%3, remains=%6",
                      operands);
     /* Load loop counter */
-
     if (CONST_INT_P (operands[2]))
       {
         if (0 == OPVAL(2))
@@ -4129,6 +4478,28 @@ skip_loop:;
                              : "ld.<load_suffix>\t%A5, [%1+]%3", operands);
             output_asm_insn ("st.<store_suffix>\t[%0+]%3, %A5", operands);
           }
+        else if (TImode == <MODE>mode)
+          {
+            if (TRIC_18UP)
+              {
+                output_asm_insn (same_addr
+                             ? "ld.<load_suffix>\t%Q5, [%1]"
+                             : "ld.<load_suffix>\t%Q5, [%1+]%3", operands);
+                output_asm_insn ("st.<store_suffix>\t[%0+]%3, %Q5", operands);
+              }
+             else
+              {
+                output_asm_insn (same_addr
+                             ? "ld.d\t%A5, [%1]"
+                             : "ld.d\t%A5, [%1+]8", operands);
+                output_asm_insn ("st.d\t[%0+]8, %A5", operands);
+                output_asm_insn (same_addr
+                             ? "ld.d\t%A5, [%1]8"
+                             : "ld.d\t%A5, [%1+]8", operands);
+                output_asm_insn ("st.d\t[%0+]8, %A5", operands);
+              }
+              
+          }
         else
           {
             output_asm_insn (same_addr
@@ -4146,6 +4517,14 @@ skip_loop:;
 
     /* Set remaining bytes that are not covered by loop (speed only).  */
 skip_loop:;
+
+    if (remains & 8)
+      {
+        output_asm_insn (same_addr
+                         ? "ld.d\t%A5, [%1]"
+                         : "ld.d\t%A5, [%1+]8", operands);
+        output_asm_insn ("st.d\t[%0+]8, %A5", operands);
+      }
 
     if (remains & 4)
       {

@@ -397,11 +397,13 @@ extern struct tric_segment_trap tric_segment_trap;
 #define A_REGNO_P(X) ((X) >= REG_A0 && (X) <= REG_A15)
 #define D_REGNO_P(X) (((unsigned int) (X)) <= REG_D15)
 #define E_REGNO_P(X) (D_REGNO_P(X) && ((X) % 2 == 0))
+#define Q_REGNO_P(X) (D_REGNO_P(X) && ((X) % 4 == 0))
 #define EA_REGNO_P(X) ((X) >= REG_A2 && (X) <= REG_A15 && (X) % 2 == 0)
 
 #define A_REG_P(X) (REG_P(X) && (A_REGNO_P(REGNO(X))))
 #define D_REG_P(X) (REG_P(X) && (D_REGNO_P(REGNO(X))))
 #define E_REG_P(X) (REG_P(X) && (E_REGNO_P(REGNO(X))))
+#define Q_REG_P(X) (REG_P(X) && (Q_REGNO_P(REGNO(X))))
 
 #define REGISTER_PREFIX "%"
 

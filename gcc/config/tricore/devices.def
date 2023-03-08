@@ -77,3 +77,4 @@ DEF_DEVICE ("tc2d5d", "0x2d5d", "161", "tc161")
 
 DEF_DEVICE ("tc38xx", "0x3800", "162", "tc162") /* since v4.9.1.0-infineon-2.0 */
 DEF_DEVICE ("tc39xx", "0x3900", "162", "tc162") /* since v4.6.6.0 */
+DEF_DEVICE ("tc49Ax", "0x4900", "18", "tc18")   /* updated */

@@ -3050,7 +3050,14 @@ tric_print_operand (FILE *file, rtx x, int code)
     case REG:
       {
         int regno = REGNO (x);
-
+        if (Q_REGNO_P (regno))
+          switch (code)
+            {
+            case 'Q':
+              if (Q_REGNO_P (regno))
+                  fprintf (file, "%s%c%d", REGISTER_PREFIX, 'q', regno);
+              return;
+            }
         if (E_REGNO_P (regno)  ||  EA_REGNO_P (regno))
           switch (code)
             {
@@ -5116,6 +5123,11 @@ tric_regno_reg_class (int r)
 bool
 tric_hard_regno_mode_ok (unsigned int regno, enum machine_mode mode)
 {
+  if (mode == TImode)
+  {
+	  return (Q_REGNO_P (regno));
+  }
+
   if (GET_MODE_SIZE (mode) > UNITS_PER_WORD)
   {
 	  return (E_REGNO_P (regno) || EA_REGNO_P (regno));
@@ -5177,6 +5189,9 @@ tric_mode_for_align (HOST_WIDE_INT align, rtx xlen)
       if (optimize_insn_for_speed_p())
         len = 0;
       
+      if (align % 4 == 0 && len % 16 == 0)
+        return TImode;
+
       if (align % 4 == 0 && len % 8 == 0)
         return DImode;
       
@@ -7713,6 +7728,110 @@ tric_emit_cbranchsf4 (rtx xop[])
                                                   const0_rtx)));
 }
 
+/* Worker function for "cbranchdf4" insn
+   $0 = comparison operator
+   $3 = label to jump if condition $1 <$0> $2 is true.  */
+
+void
+tric_emit_cbranchdf4 (rtx xop[])
+{
+  int bit1 = -1;
+  int bit2 = -1;
+  int bit3 = -1;
+  enum rtx_code code = GET_CODE (xop[0]);
+  rtx reg = gen_reg_rtx (SImode);
+
+  /* Do a CMP.F instruction on the stuff to be compared (two regs) */
+  emit_insn (gen_cmp_df (reg, xop[1], xop[2]));
+
+  /* Depending on the comparison to be performed, CMP.F will have set
+     some bits. Indentify which bits to use for the jump. We jump if
+     any of these bits is non-zero, i.e. we will OR the bits in the end. */
+
+  switch (code)
+    {
+    default:
+      gcc_unreachable();
+
+    case EQ:
+      bit1 = CMP_DF_EQ;
+      break;
+
+    case NE:
+      bit1 = CMP_DF_UNORDERED; bit2 = CMP_DF_LT; bit3 = CMP_DF_GT;
+      break;
+
+    case LT:
+      bit1 = CMP_DF_LT;
+      break;
+
+    case GT:
+      bit1 = CMP_DF_GT;
+      break;
+
+    case LE:
+      bit1 = CMP_DF_LT; bit2 = CMP_DF_EQ;
+      break;
+
+    case GE:
+      bit1 = CMP_DF_GT; bit2 = CMP_DF_EQ;
+      break;
+
+    case UNORDERED:
+      bit1 = CMP_DF_UNORDERED;
+      break;
+
+    case UNEQ:
+      bit1 = CMP_DF_UNORDERED; bit2 = CMP_DF_EQ;
+      break;
+
+    case UNLT:
+      bit1 = CMP_DF_UNORDERED; bit2 = CMP_DF_LT;
+      break;
+
+    case UNGT:
+      bit1 = CMP_DF_UNORDERED; bit2 = CMP_F_GT;
+      break;
+
+    case UNGE:
+      bit1 = CMP_DF_UNORDERED; bit2 = CMP_DF_GT; bit3 = CMP_DF_EQ;
+      break;
+
+    case UNLE:
+      bit1 = CMP_DF_UNORDERED; bit2 = CMP_DF_LT; bit3 = CMP_DF_EQ;
+      break;
+
+    case LTGT:
+      bit1 = CMP_DF_LT; bit2 = CMP_DF_GT;
+      break;
+    }
+
+  if (bit3 != -1)
+    {
+      /* 3 bits: Mask the relevant bits out using AND. The highest bit set
+         by CMP.F is bit 5, so ANDing will always work without loading
+         the mask. */
+
+      emit_insn (gen_andsi3 (reg, reg, GEN_INT ((1 << bit1) | (1 << bit2)
+                                                | (1 << bit3))));
+    }
+  else
+    {
+      /* 1 or 2 bits: mask the relevant bits using OR.T.
+         If just one bit is used, combine will collapse this to JNZ.T */
+
+      if (bit2 == -1)
+        bit2 = bit1;
+      emit_insn (gen_iorsi3_zerox1 (reg,
+                                    reg, GEN_INT (bit1), reg, GEN_INT (bit2)));
+    }
+
+  /* yeah! let's jump! */
+
+  emit_jump_insn (gen_branch_rtx (xop[3],
+                                  gen_rtx_fmt_ee (NE, VOIDmode, reg,
+                                                  const0_rtx)));
+}
 
 static bool
 tric_can_use_doloop_p (const widest_int &,
@@ -7902,6 +8021,8 @@ tric_init_libfuncs (void)
 static bool
 tric_scalar_mode_supported_p (scalar_mode mode)
 {
+  if (mode == TImode)
+    return false;
   if (mode == HFmode)
     return true;
   else
@@ -9232,6 +9353,12 @@ tric_eabi_round_type_align (tree type, unsigned computed, unsigned specified)
         }
     }
 
+  /* assign 4byte alignment if greater 256 to ensure correct ld.dd and st.dd usage in memset* memmov* */
+  if (TRIC_18UP)
+  {
+	  if ((size_low_cst (tsize)>=256) && (align<=16)) align=32;
+  }
+  
   return align;
 }
 

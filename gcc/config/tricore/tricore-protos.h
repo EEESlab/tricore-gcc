@@ -84,6 +84,7 @@ extern void tric_emit_casesi (rtx,rtx,rtx,rtx,rtx);
 extern void tric_emit_cbranchsi4 (rtx[]);
 extern void tric_emit_cbranchdi4 (rtx[]);
 extern void tric_emit_cbranchsf4 (rtx[]);
+extern void tric_emit_cbranchdf4 (rtx[]);
 extern rtx tric_emit_multiply_add (rtx, rtx, rtx, rtx);
 extern rtx tric_emit_mulsidi (rtx, rtx, rtx, enum rtx_code);
 extern void tric_emit_maddsidi4_const (rtx*);

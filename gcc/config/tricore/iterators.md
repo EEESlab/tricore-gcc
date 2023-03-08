@@ -4,6 +4,8 @@
 
 (define_mode_iterator QIHISIDI [(QI "") (HI "") (SI "") (DI "")])
 
+(define_mode_iterator QIHISIDITI [(QI "") (HI "") (SI "") (DI "") (TI "")])
+
 (define_mode_iterator QISI [(QI "") (SI "")])
 
 (define_mode_iterator SIDI    [(SI "") (DI "")])
@@ -11,18 +13,21 @@
 (define_mode_iterator DIDF    [(DI "") (DF "")])
 (define_mode_iterator DIPDI   [(DI "") (PDI "")])
 (define_mode_iterator DIPDIDF [(DI "") (DF "") (PDI "")])
+(define_mode_iterator TIDIPDIDF [(TI "") (DI "") (DF "") (PDI "")])
 
 (define_mode_attr load_suffix
   [(QI "bu")
    (HI "h")
    (SI "w")
-   (DI "d")])
+   (DI "d")
+   (TI "dd")])
 
 (define_mode_attr store_suffix
   [(QI "b")
    (HI "h")
    (SI "w")
-   (DI "d")])
+   (DI "d")
+   (TI "dd")])
 
 ;; We use several incarnations of this iterator
 ;; so that we can build cross products

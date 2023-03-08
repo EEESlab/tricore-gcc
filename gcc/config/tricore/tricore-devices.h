@@ -112,13 +112,17 @@ extern void tric_set_device (const char*);
 #define TRIC_16UP  (tric_core->id >= 0x160)
 #define TRIC_161UP (tric_core->id >= 0x161)
 #define TRIC_162UP (tric_core->id >= 0x162)
+#define TRIC_18    (tric_core->id == 0x180)
+#define TRIC_18UP  (tric_core->id >= 0x180)
 
 #define TRIC_HAVE_DIV   (TRIC_16UP)
+#define TRIC_HAVE_DIV64 (TRIC_18UP)
 #define TRIC_HAVE_FTOIZ (TRIC_131UP)
 #define TRIC_HAVE_MOV64 (TRIC_16UP)
 #define TRIC_HAVE_FCALL (TRIC_16UP)
 #define TRIC_HAVE_CMPSWAP_W (TRIC_161UP)
 #define TRIC_HAVE_SWAPMSK_W (TRIC_161UP)
+#define TRIC_HAVE_DP    (TRIC_18UP)
 
 #define TRIC_HAVE_CRCN        (TRIC_162UP)
 #define TRIC_HAVE_LHA         (TRIC_162UP)

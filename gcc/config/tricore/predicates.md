@@ -38,6 +38,10 @@
   (and (match_code "reg")
        (match_test "E_REGNO_P (REGNO(op))")))
 
+(define_predicate "q_reg_operand"
+  (and (match_code "reg")
+       (match_test "Q_REGNO_P (REGNO(op))")))
+
 (define_predicate "u3_operand"
   (and (match_code "const_int")
        (match_test "INTVAL(op) >= 0 && INTVAL(op) < (1<<3)")))
@@ -344,6 +348,9 @@
   (match_code "geu,ltu"))
 
 (define_special_predicate "tric_float_comparison_operator"
+  (match_code "eq,ne,le,lt,ge,gt,unordered,uneq,unge,ungt,unle,unlt,ltgt"))
+
+(define_special_predicate "tric_dfloat_comparison_operator"
   (match_code "eq,ne,le,lt,ge,gt,unordered,uneq,unge,ungt,unle,unlt,ltgt"))
 
 ;; Used in peep2: all operators that support "d,d,d Ksa"
