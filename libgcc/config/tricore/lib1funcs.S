@@ -101,7 +101,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
     nop
 #if defined (__TC13__) || defined (__TC131__) || defined (__TC16__)
     jz.t    %d1, 22, .Llower_context
-#elif defined (__TC161__) || defined (__TC162__)
+#elif defined (__TC161__) || defined (__TC162__) || defined (__TC18__)
     jz.t    %d1, 20, .Llower_context
 #else
 #error adjust setjmp / longjmp
