@@ -134,4 +134,6 @@ extern void tric_set_device (const char*);
 #define TRIC_ERRATA_076 (tric_errata[tric_errata_cpu076].fixit)
 #define TRIC_ERRATA_081 (tric_errata[tric_errata_cpu081].fixit)
 #define TRIC_ERRATA_101 (tric_errata[tric_errata_cpu101].fixit)
+#define TRIC_ERRATA_141 (tric_errata[tric_errata_cpu141].fixit)
 
+#define TRIC_IS_AFFECTED_BY_CPU141 (tric_device && (0 == strcmp ("tc49Ax", tric_device->name)))

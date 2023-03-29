@@ -2175,7 +2175,7 @@
         (div:DI (match_operand:DI 1 "register_operand"  "d")
                 (match_operand:DI 2 "register_operand"  "d")))
    (clobber (reg:SI REG_PSW))]
-  "TRIC_HAVE_DIV64"
+  "TRIC_HAVE_DIV64 && !TRIC_ERRATA_141"
   "div64\t%A0, %A1, %A2"
   [(set_attr "pipe" "ip3")])
 
@@ -2187,7 +2187,7 @@
         (mod:DI (match_operand:DI 1 "register_operand"  "d")
                 (match_operand:DI 2 "register_operand"  "d")))
    (clobber (reg:SI REG_PSW))]
-  "TRIC_HAVE_DIV64"
+  "TRIC_HAVE_DIV64 && !TRIC_ERRATA_141"
   "rem64\t%A0, %A1, %A2"
   [(set_attr "pipe" "ip3")])
 
@@ -2196,7 +2196,7 @@
         (udiv:DI (match_operand:DI 1 "register_operand"  "d")
                  (match_operand:DI 2 "register_operand"  "d")))
    (clobber (reg:SI REG_PSW))]
-  "TRIC_HAVE_DIV64"
+  "TRIC_HAVE_DIV64 && !TRIC_ERRATA_141"
   "div64.u\t%A0, %A1, %A2"
   [(set_attr "pipe" "ip3")])
 
@@ -2205,7 +2205,7 @@
         (umod:DI (match_operand:DI 1 "register_operand"  "d")
                  (match_operand:DI 2 "register_operand"  "d")))
    (clobber (reg:SI REG_PSW))]
-  "TRIC_HAVE_DIV64"
+  "TRIC_HAVE_DIV64 && !TRIC_ERRATA_141"
   "rem64.u\t%A0, %A1, %A2"
   [(set_attr "pipe" "ip3")])
 

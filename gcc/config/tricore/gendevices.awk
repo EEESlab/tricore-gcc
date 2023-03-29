@@ -55,6 +55,7 @@ BEGIN {
 
 	do_core["TRIC_13"]  = "1.3.0"
 	do_core["TRIC_131"] = "1.3.1"
+	do_core["TRIC_18"]  = "1.8.0"
 
 	print "@c start errata.texi"
 	print ""
@@ -84,6 +85,7 @@ BEGIN {
 
 	do_core["TRIC_13"]  = "1.3"
 	do_core["TRIC_131"] = "1.3.1"
+	do_core["TRIC_18"]  = "1.8.0"
 
 	print "% start tricore_errata.tex"
 	print ""

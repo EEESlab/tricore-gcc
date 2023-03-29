@@ -229,4 +229,10 @@ Enum(tric_merrata) String(cpu114) Value(tric_errata_cpu114)
 EnumValue
 Enum(tric_mnoerrata) String(cpu114) Value(tric_errata_cpu114)
 
+EnumValue
+Enum(tric_merrata) String(cpu141) Value(tric_errata_cpu141)
+
+EnumValue
+Enum(tric_mnoerrata) String(cpu141) Value(tric_errata_cpu141)
+
 
