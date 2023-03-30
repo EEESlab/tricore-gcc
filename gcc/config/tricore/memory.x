@@ -1036,6 +1036,44 @@ __ISTACK_SIZE = 256;
 __HEAP_MIN = 8K;
 __CSA_SIZE = 16K;
 
+#elif __TRICORE_NAME__  == 0x4900
+#define __MESSAGE__ "Using wrong Memory Map. This Map is for TC49Ax"
+#define I_C_F_B   0x80000000
+#define I_C_F_S   3M
+#define I_C_F_B_0 0x80000000
+#define I_C_F_S_0 3M
+#define I_C_F_B_1 0x80300000
+#define I_C_F_S_1 3M
+#define I_C_F_B_2 0x80600000
+#define I_C_F_S_2 3M
+#define I_C_F_B_3 0x80900000
+#define I_C_F_S_3 3M
+#define I_C_F_B_4 0x80c00000
+#define I_C_F_S_4 3M
+#define I_C_F_B_5 0x80f00000
+#define I_C_F_S_5 1M
+#define I_D_F_B   0xaf000000
+#define I_D_F_S    1M
+#define I_D_F_B_0 0xaf000000
+#define I_D_F_S_0  1M
+#define E_C_R_B   0
+#define E_C_R_S   0
+#define E_D_R_B   0
+#define E_D_R_S   0
+#define I_C_R_B   0xc0000000
+#define I_C_R_S    64K
+#define I_D_R_B   0xd0000000
+#define I_D_R_S    96K
+#define P_C_R_B   0
+#define P_C_R_S   0
+#define P_D_R_B   0
+#define P_D_R_S   0
+
+__USTACK_SIZE = 4K;
+__ISTACK_SIZE = 256;
+__HEAP_MIN = 8K;
+__CSA_SIZE = 16K;
+
 #endif
 
 

@@ -115,10 +115,21 @@ tric_set_device (const char *name)
 
   if (name == NULL)
     {
-      if (tric_core || tric_device)
+      if (tric_core && tric_device)
         return;
-
-      name = tric_devices[0].name;
+      if(tric_core)
+        {
+	  for (device = tric_devices; device->name != NULL; device++)
+            {
+              if (!STREQ (tric_core->name, device->core_mtc))
+                continue;
+               /* Found the device */
+               tric_device = device;
+               return;
+            }
+        }
+      else
+        name = tric_devices[0].name;
     }
 
   for (device = tric_devices; device->name != NULL; device++)

@@ -29,7 +29,7 @@
 #endif    
 
 #if defined (__TRICORE_CORE__) \
-	&& (__TRICORE_CORE__ == 0x161 || __TRICORE_CORE__ == 0x162)
+	&& (__TRICORE_CORE__ == 0x161 || __TRICORE_CORE__ == 0x162 || __TRICORE_CORE__ == 0x180 )
 #include "crt0-tc2x.S"
 #else
 #include "crt0-tc1x.S"
