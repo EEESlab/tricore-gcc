@@ -57,6 +57,7 @@ MULTILIB_MATCHES = \
 	mtc161=mcpu?tc2d5d \
 	mtc162=mcpu?tc38xx \
 	mtc162=mcpu?tc39xx \
-	mtc18=mcpu?tc49Ax 
+	mtc18=mcpu?tc49Ax \
+	mtc18=mcpu?tc4DAx
 
-TRIC_DEVICES = tc1796 tc1130 tc116x tc1161 tc1162 tc1762 tc1764 tc1766 tc1792 tc1920 tc1167 tc1197 tc1337 tc1367 tc1387 tc1724 tc1728 tc1736 tc1767 tc1782 tc1783 tc1784 tc1797 tc1791 tc1793 tc1798 tc22xx tc23xx tc26xx tc27xx tc29xx tc2d5d tc38xx tc39xx tc49Ax
+TRIC_DEVICES = tc1796 tc1130 tc116x tc1161 tc1162 tc1762 tc1764 tc1766 tc1792 tc1920 tc1167 tc1197 tc1337 tc1367 tc1387 tc1724 tc1728 tc1736 tc1767 tc1782 tc1783 tc1784 tc1797 tc1791 tc1793 tc1798 tc22xx tc23xx tc26xx tc27xx tc29xx tc2d5d tc38xx tc39xx tc49Ax tc4DAx
