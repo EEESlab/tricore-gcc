@@ -56,6 +56,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "tm-constrs.h"
 #include "rtl-iter.h"
 #include "print-rtl.h"
+#include "tree-ssa-alias.h"
 
 /* This file should be included last.  */
 #include "target-def.h"
@@ -6863,6 +6864,302 @@ tric_call_insn_use_regs_mask (rtx insn)
   return mask;
 }
 
+bool remove_strcmp(rtx_insn *insn_ref, rtx *operands)
+{
+  basic_block block;
+  rtx_insn *insn, *end;
+  tree src1, src2;
+  const char * first_str = 0;
+  const char * second_str = 0;
+  tree dst_first_str, dst_second_str;
+
+  rtx str1 = XVECEXP (XEXP (XVECEXP (XEXP (insn_ref, 3), 0, 0), 1), 0, 0);
+  rtx str2 = XVECEXP (XEXP (XVECEXP (XEXP (insn_ref, 3), 0, 0), 1), 0, 1);
+  tree t1 = MEM_EXPR (str1);
+  tree t2 = MEM_EXPR (str2);
+
+  // Memrefs must be available for both strings
+  if (!t1 || !t2 ||TREE_CODE (t1) != MEM_REF || TREE_CODE (t2) != MEM_REF
+      || TREE_CODE (TREE_OPERAND (t1, 0)) != ADDR_EXPR
+      || TREE_CODE (TREE_OPERAND (t2, 0)) != ADDR_EXPR)
+    return false;
+
+  if (MEM_VOLATILE_P (str1) || MEM_VOLATILE_P (str2))
+    return false;
+
+  // For all BBs in the current function
+  FOR_ALL_BB_FN (block, cfun)
+  {
+    // For all instructions in the current BB
+    FOR_BB_INSNS (block, insn)
+    {
+      // Stop when we encouter the current strcmp insn
+      if(insn == insn_ref) goto end;
+
+      // We consider only standard insns
+      if (!INSN_P (insn))
+        continue;
+
+      int code = recog_memoized (insn);
+
+      // strcpy
+      if (code == CODE_FOR_cpymemsi_qi ||
+          code == CODE_FOR_cpymemsi_si ||
+          code == CODE_FOR_cpymemsi_di ||
+	  code == CODE_FOR_cpymemsi_ti)
+
+      {
+        rtx dst_ = XEXP (XVECEXP (XEXP (insn, 3), 0, 0), 0);
+        tree dst = MEM_EXPR (dst_);
+        if (dst && TREE_CODE (dst) == MEM_REF
+                && TREE_CODE (TREE_OPERAND (dst, 0)) == ADDR_EXPR)
+        {
+	  // Found a ref to str1
+          if (TREE_OPERAND (TREE_OPERAND (t1, 0), 0) == TREE_OPERAND (TREE_OPERAND (dst, 0), 0)) 
+          {
+  	    rtx src_ = XVECEXP (XEXP (XVECEXP (XEXP (insn, 3), 0, 0), 1), 0, 0);
+            src1 = MEM_EXPR (src_);
+	    if (src1 && TREE_CODE (src1) == MEM_REF
+	  	  && TREE_CODE (TREE_OPERAND (src1, 0)) == ADDR_EXPR
+		  && (TREE_CODE (TREE_OPERAND (TREE_OPERAND (src1, 0), 0)) == STRING_CST))
+	    {
+              // Found a string constant
+	      dst_first_str = dst;
+	      first_str = TREE_STRING_POINTER(TREE_OPERAND (TREE_OPERAND (src1, 0), 0));
+	    }
+          }
+	  // Found a ref to str2
+	  else if (TREE_OPERAND (TREE_OPERAND (t2, 0), 0) == TREE_OPERAND (TREE_OPERAND (dst, 0), 0))
+          {
+            rtx src_ = XVECEXP (XEXP (XVECEXP (XEXP (insn, 3), 0, 0), 1), 0, 0);
+            src2 = MEM_EXPR (src_);
+            if (src2 && TREE_CODE (src2) == MEM_REF
+                     && TREE_CODE (TREE_OPERAND (src2, 0)) == ADDR_EXPR
+                     && (TREE_CODE (TREE_OPERAND (TREE_OPERAND (src2, 0), 0)) == STRING_CST)) 
+	    {
+	      // Found a string constant
+	      dst_second_str = dst;
+              second_str = TREE_STRING_POINTER(TREE_OPERAND (TREE_OPERAND (src2, 0), 0));
+	    }
+          }
+	}
+      }
+      // If we found at least one string, we must check other insn to check memory writes
+      else if(first_str || second_str)
+      {
+	// Check if the current insn is a SET
+	rtx curr = XEXP (insn, 3);
+	if (curr && GET_CODE(curr) == SET)
+	{
+          // Check if the first operand is a MEM
+	  rtx first_op = XEXP (curr, 0);
+	  if (GET_CODE(first_op) == MEM)
+	  {
+	    tree t = MEM_EXPR (first_op);
+	    if (t && first_str && refs_may_alias_p(dst_first_str, t))
+              return false;
+	    if (t && second_str && refs_may_alias_p(dst_second_str, t))
+              return false;
+	  }
+	}
+      }
+    }
+  }
+
+end:
+  // If we found both constant strings we can replace with the strcmp result
+  if (first_str && second_str)
+  {
+    int result = strcmp(first_str, second_str);
+    if (result > 0) result = 1;
+    if (result < 0) result = -1;
+    rtx xoperands[2];
+    xoperands[0] = operands[0];
+    xoperands[1] = gen_rtx_CONST_INT ( GET_MODE (operands[0]), result);
+    output_asm_insn ("mov.d\t%0, %1", operands);
+    return true;
+  } 
+  return false;  
+}
+
+
+bool copy_constant_string (rtx_insn *insn_ref, rtx *operands)
+{
+  tree dst_mem, src_mem;
+  unsigned int alignment;
+  const char *str;
+  size_t len;
+  uint32_t *pointer;
+  uint8_t *leftover_1;
+  uint16_t *leftover_2;
+
+  // Check destination buffer
+  dst_mem = MEM_EXPR ( XEXP (XVECEXP (XEXP (insn_ref, 3), 0, 0), 0));
+  if (dst_mem)
+  {
+    alignment = get_object_alignment (dst_mem);
+    if(alignment % 32 != 0) return false;
+  }
+  else
+    return false;
+
+  // Check source data
+  src_mem = MEM_EXPR ( XVECEXP (XEXP (XVECEXP (XEXP (insn_ref, 3), 0, 0), 1), 0, 0));
+  if (src_mem && TREE_CODE (src_mem) == MEM_REF
+      && TREE_CODE (TREE_OPERAND (src_mem, 0)) == ADDR_EXPR
+      && (TREE_CODE (TREE_OPERAND (TREE_OPERAND (src_mem, 0), 0)) == STRING_CST))
+  {
+    rtx xoperands[5];
+
+    // Get string and check length
+    str = TREE_STRING_POINTER(TREE_OPERAND (TREE_OPERAND (src_mem, 0), 0));
+    len = strlen(str) + 1;
+    if (len > 64) return false;
+
+    // Generate assembly
+    xoperands[0] = operands[0];
+    xoperands[2] = operands[5];
+    pointer = (uint32_t *) str;
+    for (int i = 0; i<len/4; i++)
+    {
+      xoperands[1] = gen_rtx_CONST_INT ( GET_MODE (operands[7]), i*4);
+      xoperands[3] = gen_rtx_CONST_INT ( GET_MODE (operands[7]), (*pointer) >> 16);
+      xoperands[4] = gen_rtx_CONST_INT ( GET_MODE (operands[7]), (*pointer) & 0xFFFF);
+      output_asm_insn ("movh\t%2, %3", xoperands);
+      output_asm_insn ("addi\t%2, %2, %4", xoperands);
+      output_asm_insn ("st.w\t[%0]%1, %2", xoperands);
+      pointer++;
+    }
+    leftover_2 = (uint16_t *) pointer;
+    if ((len%4) && 3)
+    {
+      xoperands[1] = gen_rtx_CONST_INT ( GET_MODE (operands[7]), (len/4)*4);
+      xoperands[3] = gen_rtx_CONST_INT ( GET_MODE (operands[7]), *leftover_2);
+      output_asm_insn ("mov\t%2, %3", xoperands);
+      output_asm_insn ("st.h\t[%0]%1, %2", xoperands);
+      leftover_2++;
+    }
+    leftover_1 = (uint8_t *) leftover_2;
+    if ((len%4) && 1)
+    {
+      xoperands[1] = gen_rtx_CONST_INT ( GET_MODE (operands[7]), len-1);
+      xoperands[3] = gen_rtx_CONST_INT ( GET_MODE (operands[7]), *leftover_1);
+      output_asm_insn ("mov\t%2, %3", xoperands);
+      output_asm_insn ("st.b\t[%0]%1, %2", xoperands);      
+    }	    
+    return true;
+  }
+  else
+    return false;
+}
+
+/* If MEM is in the form of [base+offset], extract the two parts
+   of address and set to BASE and OFFSET, otherwise return false
+   after clearing BASE and OFFSET.  */
+
+static bool
+extract_base_offset_in_addr (rtx mem, rtx *base, rtx *offset)
+{
+  rtx addr;
+
+  gcc_assert (MEM_P (mem));
+
+  addr = XEXP (mem, 0);
+
+  /* Strip off const from addresses like (const (addr)).  */
+  if (GET_CODE (addr) == CONST)
+    addr = XEXP (addr, 0);
+
+  if (REG_P (addr))
+    {
+      *base = addr;
+      *offset = const0_rtx;
+      return true;
+    }
+
+  if (GET_CODE (addr) == PLUS
+      && GET_CODE (XEXP (addr, 0)) == REG
+      && CONST_INT_P (XEXP (addr, 1)))
+    {
+      *base = XEXP (addr, 0);
+      *offset = XEXP (addr, 1);
+      return true;
+    }
+
+  *base = NULL_RTX;
+  *offset = NULL_RTX;
+
+  return false;
+}
+
+static bool
+fusion_lea_mem (rtx_insn *insn, rtx *base, rtx *offset, bool *is_mem)
+{
+  rtx x, dest, src;
+
+  gcc_assert (INSN_P (insn));
+  x = PATTERN (insn);
+  if (GET_CODE (x) != SET)
+    return false;
+
+  src = SET_SRC (x);
+  dest = SET_DEST (x);
+  if (REG_P (dest) && GET_CODE (src) == LO_SUM)
+    {
+      *is_mem = false;
+      *base = dest;
+      *offset = NULL_RTX;
+    }
+  else if (MEM_P (src) && REG_P (dest))
+    {
+      *is_mem = true;
+      extract_base_offset_in_addr (src, base, offset);
+    }
+  else if (REG_P (src) && MEM_P (dest))
+    {
+      *is_mem = true;
+      extract_base_offset_in_addr (dest, base, offset);
+    }
+  else
+    return false;
+
+  return (*base != NULL_RTX);
+}
+
+/* Implement the TARGET_SCHED_FUSION_PRIORITY hook. */
+static void
+tricore_sched_fusion_priority (rtx_insn *insn, int max_pri,
+                               int *fusion_pri, int *pri)
+{
+  int tmp;
+  bool is_mem;
+  rtx base, offset;
+
+  tmp = max_pri - 1;
+
+  if (!fusion_lea_mem (insn, &base, &offset, &is_mem))
+  {
+      *pri = 1;
+      *fusion_pri = 1;
+      //printf("fusion_pri = %d, pri = %d \n", fusion_pri, pri);
+      //debug(insn);
+      return;
+  }
+
+  /* LEA goes first.  */
+  if (!is_mem)
+    *fusion_pri = tmp - 2;
+  else
+    *fusion_pri = tmp - 2;
+  tmp /= 2;
+
+  /* INSN with smaller base register goes first.  */
+  tmp -= ((REGNO (base) & 0xff) << 20);
+
+  *pri = tmp;
+
+  return;
+}
 
 /* Print a CALL_INSN. The operands are:
    value_p = 0:
@@ -6891,6 +7188,23 @@ tric_output_call (rtx insn, rtx *operands, int value_p)
   int sibling_p = CALLCOOKIE_SIBLING_MASK & cookie;
   int pxhndcall_p = CALLCOOKIE_PXHNDCALL_MASK & cookie;
   int noreturn_p = NULL_RTX != find_reg_note (insn, REG_NORETURN, NULL);
+//  int fcall_p = 0;
+
+  /* Check if fcall is possible */
+//  rtx callee = XEXP (addr, 0);
+//  printf("*** %x\n", cfun);
+//  if (GET_CODE (addr) == SYMBOL_REF)
+//  {
+//    struct function *func = DECL_STRUCT_FUNCTION (SYMBOL_REF_DECL (addr));
+//    const char * fname = XSTR (addr, 0);
+    ////// debug_tree(SYMBOL_REF_DECL (addr));
+   ///////  printf("name = %s fcall = %d, FUNC_DECL = %d, f = %x\n", fname, fcall_p, TREE_CODE (SYMBOL_REF_DECL (addr)) == FUNCTION_DECL, func);
+    //printf("%x\n", SYMBOL_REF_DECL (addr));
+
+    //fcall_p = !(func->machine->use_upper_context);
+
+    //printf("name = %s fcall = %d\n", fname, fcall_p);
+//  }
 
   /* Compute register mask of passed regs */
   if (sibling_p || pxhndcall_p || flag_verbose_asm || flag_print_asm_name)
@@ -6961,7 +7275,7 @@ tric_output_call (rtx insn, rtx *operands, int value_p)
     }
 
   if (find_reg_note (insn, REG_SETJMP, NULL)
-      || (cookie & CALLCOOKIE_USE_CALL_MASK))
+      || (cookie & CALLCOOKIE_USE_CALL_MASK) /*|| fcall_p*/)
     {
       sibling_p = 0;
     }
@@ -6969,7 +7283,7 @@ tric_output_call (rtx insn, rtx *operands, int value_p)
   if (CONST_INT_P (addr))
     output_asm_insn (sibling_p ? "ja\t%0" : "calla\t%0", &addr);
   else
-    output_asm_insn (sibling_p ? "j%I0\t%0" : "call%I0\t%0", &addr);
+    output_asm_insn (sibling_p ? "j%I0\t%0" : (/*fcall_p*/false? "fcall%I0\t%0" : "call%I0\t%0"), &addr);
 }
 
 
@@ -9366,8 +9680,13 @@ tric_eabi_round_type_align (tree type, unsigned computed, unsigned specified)
 /* Implement `DATA_ALIGNMENT' */
 
 unsigned
-tric_eabi_data_alignment (tree type ATTRIBUTE_UNUSED, unsigned basic_align)
+tric_eabi_data_alignment (tree type, unsigned basic_align)
 {
+  unsigned best_align = BITS_PER_WORD;
+  if (TREE_CODE (type) == ARRAY_TYPE)
+  {
+    return  best_align>basic_align? best_align: basic_align;
+  }
   return basic_align;
 }
 
@@ -10389,6 +10708,41 @@ return false;
 }
 
 
+/* Implement `TARGET_SET_CURRENT_FUNCTION'.  */
+static void
+tricore_set_current_function (tree decl)
+{
+  int regno;
+
+  if (decl == NULL_TREE
+      || current_function_decl == NULL_TREE
+      || current_function_decl == error_mark_node
+      || ! cfun->machine)
+    return;
+
+  /* check if the function uses registers included in the upper context */
+  cfun->machine->use_upper_context = 0;
+  for (regno = REG_D8; regno <= REG_D15; regno++)
+  {
+    if (df_regs_ever_live_p (regno))
+    {
+      cfun->machine->use_upper_context = 1;
+      break;
+    }
+  }
+  for (regno = REG_A12; !cfun->machine->use_upper_context && regno <= REG_A15; regno++)
+  {
+    if (df_regs_ever_live_p (regno))
+    {
+      cfun->machine->use_upper_context = 1;
+    }
+  }
+  if (df_regs_ever_live_p (REG_PSW))
+  {
+    cfun->machine->use_upper_context = 1;
+  }
+}
+
 /***********************************************************************
  ** Target Hooks
  ***********************************************************************/
@@ -10645,6 +10999,12 @@ return false;
 //only the hook was added
 #undef  TARGET_HTC_SCHED_MAY_CHANGE_ADDRESS_P
 #define TARGET_HTC_SCHED_MAY_CHANGE_ADDRESS_P tric_sched_may_change_address_p
+
+#undef  TARGET_SET_CURRENT_FUNCTION
+#define TARGET_SET_CURRENT_FUNCTION tricore_set_current_function
+
+#undef TARGET_SCHED_FUSION_PRIORITY
+#define TARGET_SCHED_FUSION_PRIORITY tricore_sched_fusion_priority
 
 struct gcc_target targetm = TARGET_INITIALIZER;
 

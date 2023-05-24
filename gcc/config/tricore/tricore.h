@@ -23,6 +23,7 @@ a copy of the GCC Runtime Library Exception along with this program;
 see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 <http://www.gnu.org/licenses/>.  */
 
+#include <stdbool.h>
 
 /* We define the as specific configures from auto-host.h here to get an
    consistent version.  Especially the HAVE_GAS_SHF_MERGE should be undefined
@@ -336,15 +337,14 @@ extern struct tric_segment_trap tric_segment_trap;
 
 #define REG_ALLOC_ORDER                         \
 {                                               \
-    REG_D15,                                    \
+    REG_D0,                                     \
+    REG_D1,                                     \
     REG_D2,                                     \
     REG_D3,                                     \
     REG_D4,                                     \
     REG_D5,                                     \
     REG_D6,                                     \
     REG_D7,                                     \
-    REG_D0,                                     \
-    REG_D1,                                     \
     REG_D8,                                     \
     REG_D9,                                     \
     REG_D10,                                    \
@@ -352,21 +352,22 @@ extern struct tric_segment_trap tric_segment_trap;
     REG_D12,                                    \
     REG_D13,                                    \
     REG_D14,                                    \
+    REG_D15,                                    \
                                                 \
-    REG_A15,                                    \
     REG_A2,                                     \
     REG_A3,                                     \
     REG_A4,                                     \
     REG_A5,                                     \
     REG_A6,                                     \
     REG_A7,                                     \
-    REG_A12,                                    \
-    REG_A13,                                    \
-    REG_A14,                                    \
     REG_A0,                                     \
     REG_A1,                                     \
     REG_A8,                                     \
     REG_A9,                                     \
+    REG_A12,                                    \
+    REG_A13,                                    \
+    REG_A14,                                    \
+    REG_A15,                                    \
     REG_A10,                                    \
     REG_A11,                                    \
                                                 \
@@ -627,6 +628,9 @@ extern int tric_set_ratio (int);
 #define DATA_ALIGNMENT(type, basic_align)       \
   tric_eabi_data_alignment (type, basic_align)
 
+#define LOCAL_ALIGNMENT(TYPE, ALIGN) \
+  DATA_ALIGNMENT (TYPE, ALIGN)
+
 #define ROUND_TYPE_ALIGN(type, computed, specified)             \
   tric_eabi_round_type_align (type, computed, specified)
 
@@ -753,6 +757,9 @@ struct GTY(()) machine_function
 {
   /* 'true' - if the current function is a leaf function.  */
   int is_leaf;
+
+  /* 'true' - if the current function uses upper context registers.  */
+  int use_upper_context;
     
   /* 'true' - if current function is an interrupt function 
      as specified by the "interrupt" attribute.  */
@@ -856,3 +863,7 @@ typedef struct GTY(()) tric_section
 #define TRIC_PIPEVARIANT_VALUE ((enum attr_pipevariant)tric_opt_pipevariant)
 
 #define INIT_EXPANDERS tric_init_expanders()
+
+/* Helper functions for late backend optimizations */
+bool copy_constant_string (rtx_insn *, rtx *);
+bool remove_strcmp (rtx_insn *, rtx *);

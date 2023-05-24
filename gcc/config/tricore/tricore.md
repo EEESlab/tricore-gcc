@@ -64,6 +64,7 @@
    UNSPEC_MEMSET
    UNSPEC_MOVMEM
    UNSPEC_MOVSTR
+   UNSPEC_STRCMP
    UNSPEC_NEG
    UNSPEC_SUBX
    UNSPEC_SUBC
@@ -71,6 +72,7 @@
    UNSPEC_TABLEJUMP
    UNSPEC_UDIV_INIT
    UNSPEC_UDIV_STEP
+   UNSPEC_EQANY
    ])
 
 (define_c_enum "unspecv"
@@ -4428,7 +4430,7 @@ skip_loop:;
 ;; "*cpymemsi.si"
 ;; "*cpymemsi.di"
 ;; "*cpymemsi.ti"
-(define_insn "*cpymemsi.<mode>"
+(define_insn "cpymemsi_<mode>"
   [(set (mem:BLK (match_operand:SI 0 "register_operand"               "a,a"))    ;; dest
         (unspec:BLK [(mem:BLK (match_operand:SI 1 "register_operand"  "a,a"))    ;; src
                      ] UNSPEC_MOVMEM))
@@ -4441,6 +4443,11 @@ skip_loop:;
    (clobber (match_operand:QIHISIDITI 5 "register_operand"           "=<cpymem_clobber>"))] ;; clobber register
   ""
   {
+    // Use an unrolled copy for constant data
+    // PREREQUISITES: constant string, word-aligned destination
+    if (copy_constant_string (insn, operands))
+      return "";
+
     int same_addr = REGNO (operands[0]) == REGNO (operands[1]);
     int remains = OPVAL (6);
     bool looping = true;
@@ -4454,7 +4461,7 @@ skip_loop:;
         if (0 == OPVAL(2))
           goto skip_loop;
     
-        if (1 == OPVAL(2) || 2 == OPVAL(2))
+        if (OPVAL(2) < 32)
           looping = false, unrolls = OPVAL(2);
         else
           output_asm_insn ("lea\t%4, %2-1", operands);
@@ -4576,6 +4583,424 @@ skip_loop:;
     emit_insn (gen_addsi3 (operands[0], a_dest, constm1_rtx));
     DONE;
   })
+
+(define_insn "eqany_b"
+  [(set (match_operand:SI 0 "register_operand" "=d")
+        (unspec:SI [(match_operand:SI 1 "register_operand"  "d")
+                    (match_operand:SI 2 "reg_or_u9_operand" "d Ku9")]
+         UNSPEC_EQANY))]
+    ""
+    "eqany.b\t%0, %1, %2"
+    [(set_attr "pipe" "ip")])
+
+
+(define_expand "cmpstrsi"
+  [(parallel [
+   (set (match_operand:SI              0 "register_operand" "")
+        (unspec:SI [(match_operand:BLK 1 "memory_operand" "")
+                    (match_operand:BLK 2 "memory_operand" "")]  UNSPEC_STRCMP))
+   (use (match_operand:SI                   3 "const_int_operand" ""))  ;; Known Align
+   (clobber (match_dup                 4))                     ;; val1
+   (clobber (match_dup                 5))                     ;; val2
+   (clobber (match_dup                 6))                     ;; res
+   (clobber (scratch:SI))
+   (clobber (scratch:SI))] 
+   )]
+  ""
+  {
+    rtx str1, str2;
+    enum machine_mode mode;
+
+    if (TRIC_18UP)
+      mode = TImode;
+    else if (TRIC_131UP)
+      mode = DImode;
+    else
+      mode = SImode;
+
+    str1 = copy_to_mode_reg (Pmode, XEXP (operands[1], 0));
+    str2 = copy_to_mode_reg (Pmode, XEXP (operands[2], 0));
+    operands[1] = replace_equiv_address (operands[1], str1);
+    operands[2] = replace_equiv_address (operands[2], str2);
+    operands[3] = GEN_INT (GET_MODE_SIZE (mode));
+    operands[4] = gen_reg_rtx (mode);
+    operands[5] = gen_reg_rtx (mode);
+    operands[6] = gen_reg_rtx (SImode);
+  })
+
+;; "*cmpstrsi.si"
+;; "*cmpstrsi.di"
+;; "*cmpstrsi.ti"
+(define_insn "cmpstrsi_<mode>"
+[(set (match_operand:SI 0 "register_operand" "=d")
+        (unspec:SI [(mem:BLK (match_operand:SI 1 "register_operand" "a"))  ;; str1
+                    (mem:BLK (match_operand:SI 2 "register_operand" "a"))] ;; str2
+         UNSPEC_STRCMP))
+        (use (match_operand:SI 3 "const_int_operand" "n"))               ;; step
+        (clobber (match_operand:SIDITI 4 "register_operand" "=&d"))
+        (clobber (match_operand:SIDITI 5 "register_operand" "=&d"))
+        (clobber (match_operand:SI     6 "register_operand" "=&d"))
+        (clobber (match_scratch:SI     7                    "=1" ))
+        (clobber (match_scratch:SI     8                    "=2" ))]
+    ""
+    {
+      rtx xoperands[3];
+      rtx lo1, lo2, lohi1, lohi2;
+      rtx hi1, hi2, hihi1, hihi2;
+
+      if (remove_strcmp (insn, operands))
+        return "";
+
+      output_asm_insn ("mov.d\t%0, %1", operands);
+      output_asm_insn ("and\t%0, %0, 3", operands);
+      output_asm_insn ("mov.d\t%6, %2", operands);
+      output_asm_insn ("and\t%6, %6, 3", operands);
+      output_asm_insn ("or\t%0, %0, %6", operands);
+      output_asm_insn ("jne\t%0, 0, 6f", operands);
+
+      output_asm_insn ("0:", operands);
+
+      if (TImode == <MODE>mode)
+      {
+        /* Load data from str1 into temp1 */
+        output_asm_insn ("ld.<load_suffix>\t%Q4, [%7+]%3", operands);
+        /* Load data from str2 into temp2 */
+        output_asm_insn ("ld.<load_suffix>\t%Q5, [%8+]%3", operands);
+
+        hihi1 = simplify_gen_subreg (SImode, operands[4], TImode, 12);
+        lohi1 = simplify_gen_subreg (SImode, operands[4], TImode, 8);
+        hihi2 = simplify_gen_subreg (SImode, operands[5], TImode, 12);
+        lohi2 = simplify_gen_subreg (SImode, operands[5], TImode, 8);
+        hi1 = simplify_gen_subreg (SImode, operands[4], TImode, 4);
+        lo1 = simplify_gen_subreg (SImode, operands[4], TImode, 0);
+        hi2 = simplify_gen_subreg (SImode, operands[5], TImode, 4);
+        lo2 = simplify_gen_subreg (SImode, operands[5], TImode, 0);
+
+        xoperands[0] = operands[0];
+        xoperands[1] = lo1;
+        xoperands[2] = const0_rtx;
+        output_asm_insn ("eqany.b\t%0, %1, %2", xoperands);
+        output_asm_insn ("jne\t%0, 0, 1f", xoperands);
+        xoperands[2] = lo2;
+        output_asm_insn ("sub\t%0, %1, %2", xoperands);
+        output_asm_insn ("jne\t%0, 0, 1f", xoperands);
+
+        xoperands[0] = operands[0];
+        xoperands[1] = hi1;
+        xoperands[2] = const0_rtx;
+        output_asm_insn ("eqany.b\t%0, %1, %2", xoperands);
+        output_asm_insn ("jne\t%0, 0, 2f", xoperands);
+        xoperands[2] = hi2;
+        output_asm_insn ("sub\t%0, %1, %2", xoperands);
+        output_asm_insn ("jne\t%0, 0, 2f", xoperands);
+
+        xoperands[0] = operands[0];
+        xoperands[1] = lohi1;
+        xoperands[2] = const0_rtx;
+        output_asm_insn ("eqany.b\t%0, %1, %2", xoperands);
+        output_asm_insn ("jne\t%0, 0, 3f", xoperands);
+        xoperands[2] = lohi2;
+        output_asm_insn ("sub\t%0, %1, %2", xoperands);
+        output_asm_insn ("jne\t%0, 0, 3f", xoperands);
+
+        xoperands[0] = operands[0];
+        xoperands[1] = hihi1;
+        xoperands[2] = const0_rtx;
+        output_asm_insn ("eqany.b\t%0, %1, %2", xoperands);
+        output_asm_insn ("jne\t%0, 0, 4f", xoperands);
+        xoperands[2] = hihi2;
+        output_asm_insn ("sub\t%0, %1, %2", xoperands);
+        output_asm_insn ("jne\t%0, 0, 4f", xoperands);
+
+        output_asm_insn ("j\t0b", operands);
+      }
+      else if (DImode == <MODE>mode)
+      {
+        /* Load data from str1 into temp1 */
+        output_asm_insn ("ld.<load_suffix>\t%A4, [%7+]%3", operands);
+        /* Load data from str2 into temp2 */
+        output_asm_insn ("ld.<load_suffix>\t%A5, [%8+]%3", operands);
+
+        hi1 = simplify_gen_subreg (SImode, operands[4], DImode, 4);
+        lo1 = simplify_gen_subreg (SImode, operands[4], DImode, 0);
+        hi2 = simplify_gen_subreg (SImode, operands[5], DImode, 4);
+        lo2 = simplify_gen_subreg (SImode, operands[5], DImode, 0);
+
+        xoperands[0] = operands[0];
+        xoperands[1] = lo1;
+        xoperands[2] = const0_rtx;
+        output_asm_insn ("eqany.b\t%0, %1, %2", xoperands);
+        output_asm_insn ("jne\t%0, 0, 1f", xoperands);
+        xoperands[2] = lo2;
+        output_asm_insn ("sub\t%0, %1, %2", xoperands);
+        output_asm_insn ("jne\t%0, 0, 1f", xoperands);
+
+        xoperands[0] = operands[0];
+        xoperands[1] = hi1;
+        xoperands[2] = const0_rtx;
+        output_asm_insn ("eqany.b\t%0, %1, %2", xoperands);
+        output_asm_insn ("jne\t%0, 0, 2f", xoperands);
+        xoperands[2] = hi2;
+        output_asm_insn ("sub\t%0, %1, %2", xoperands);
+        output_asm_insn ("jne\t%0, 0, 2f", xoperands);
+
+        output_asm_insn ("j\t0b", operands);
+      }
+      else
+      {
+        /* Load data from str1 into temp1 */
+        output_asm_insn ("ld.<load_suffix>\t%4, [%7+]%3", operands);
+        /* Load data from str2 into temp2 */
+        output_asm_insn ("ld.<load_suffix>\t%5, [%8+]%3", operands);
+
+        lo1 = operands[4];
+        lo2 = operands[5];
+        xoperands[0] = operands[0];
+        xoperands[1] = lo1;
+        xoperands[2] = const0_rtx;
+        output_asm_insn ("eqany.b\t%0, %1, %2", xoperands);
+        output_asm_insn ("jne\t%0, 0, 1f", xoperands);
+        xoperands[2] = lo2;
+        output_asm_insn ("sub\t%0, %1, %2", xoperands);
+        output_asm_insn ("jne\t%0, 0, 1f", xoperands);
+      }
+
+      // Compare 4 character (word1)
+      output_asm_insn ("1:", operands);
+
+      xoperands[0] = operands[0];
+      xoperands[1] = lo1;
+      output_asm_insn ("extr\t%0, %1, 0, 8", xoperands);
+      xoperands[0] = operands[6];
+      xoperands[1] = lo2;
+      output_asm_insn ("extr\t%0, %1, 0, 8", xoperands);
+      output_asm_insn ("jeq\t%0, 0, 10f", operands);
+      xoperands[0] = operands[0];
+      xoperands[1] = operands[0];
+      xoperands[2] = operands[6];
+      output_asm_insn ("sub\t%0, %1, %2", xoperands);
+      output_asm_insn ("jne\t%0, 0, 6f", operands);
+
+      xoperands[0] = operands[0];
+      xoperands[1] = lo1;
+      output_asm_insn ("extr\t%0, %1, 8, 8", xoperands);
+      xoperands[0] = operands[6];
+      xoperands[1] = lo2;
+      output_asm_insn ("extr\t%0, %1, 8, 8", xoperands);
+      output_asm_insn ("jeq\t%0, 0, 10f", operands);
+      xoperands[0] = operands[0];
+      xoperands[1] = operands[0];
+      xoperands[2] = operands[6];
+      output_asm_insn ("sub\t%0, %1, %2", xoperands);
+      output_asm_insn ("jne\t%0, 0, 6f", operands);
+
+      xoperands[0] = operands[0];
+      xoperands[1] = lo1;
+      output_asm_insn ("extr\t%0, %1, 16, 8", xoperands);
+      xoperands[0] = operands[6];
+      xoperands[1] = lo2;
+      output_asm_insn ("extr\t%0, %1, 16, 8", xoperands);
+      output_asm_insn ("jeq\t%0, 0, 10f", operands);
+      xoperands[0] = operands[0];
+      xoperands[1] = operands[0];
+      xoperands[2] = operands[6];
+      output_asm_insn ("sub\t%0, %1, %2", xoperands);
+      output_asm_insn ("jne\t%0, 0, 6f", operands);
+
+      xoperands[0] = operands[0];
+      xoperands[1] = lo1;
+      output_asm_insn ("sha\t%0, %1, -24", xoperands);
+      xoperands[0] = operands[6];
+      xoperands[1] = lo2;
+      output_asm_insn ("sha\t%0, %1, -24", xoperands);
+      output_asm_insn ("jeq\t%0, 0, 10f", operands);
+      xoperands[0] = operands[0];
+      xoperands[1] = operands[0];
+      xoperands[2] = operands[6];
+      output_asm_insn ("sub\t%0, %1, %2", xoperands);
+      output_asm_insn ("jne\t%0, 0, 6f", operands);
+
+      if (TImode == <MODE>mode || DImode == <MODE>mode)
+      {
+      // Compare 4 character (word2)
+      output_asm_insn ("2:", operands);
+
+      xoperands[0] = operands[0];
+      xoperands[1] = hi1;
+      output_asm_insn ("extr\t%0, %1, 0, 8", xoperands);
+      xoperands[0] = operands[6];
+      xoperands[1] = hi2;
+      output_asm_insn ("extr\t%0, %1, 0, 8", xoperands);
+      output_asm_insn ("jeq\t%0, 0, 10f", operands);
+      xoperands[0] = operands[0];
+      xoperands[1] = operands[0];
+      xoperands[2] = operands[6];
+      output_asm_insn ("sub\t%0, %1, %2", xoperands); 
+      output_asm_insn ("jne\t%0, 0, 6f", operands);
+
+      xoperands[0] = operands[0];
+      xoperands[1] = hi1;
+      output_asm_insn ("extr\t%0, %1, 8, 8", xoperands);
+      xoperands[0] = operands[6];
+      xoperands[1] = hi2;
+      output_asm_insn ("extr\t%0, %1, 8, 8", xoperands);
+      output_asm_insn ("jeq\t%0, 0, 10f", operands);
+      xoperands[0] = operands[0];
+      xoperands[1] = operands[0];
+      xoperands[2] = operands[6];
+      output_asm_insn ("sub\t%0, %1, %2", xoperands);
+      output_asm_insn ("jne\t%0, 0, 6f", operands);
+
+      xoperands[0] = operands[0];
+      xoperands[1] = hi1;
+      output_asm_insn ("extr\t%0, %1, 16, 8", xoperands);
+      xoperands[0] = operands[6];
+      xoperands[1] = hi2;
+      output_asm_insn ("extr\t%0, %1, 16, 8", xoperands);
+      output_asm_insn ("jeq\t%0, 0, 10f", operands);
+      xoperands[0] = operands[0];
+      xoperands[1] = operands[0];
+      xoperands[2] = operands[6];
+      output_asm_insn ("sub\t%0, %1, %2", xoperands);
+      output_asm_insn ("jne\t%0, 0, 6f", operands);
+
+      xoperands[0] = operands[0];
+      xoperands[1] = hi1;
+      output_asm_insn ("sha\t%0, %1, -24", xoperands);
+      xoperands[0] = operands[6];
+      xoperands[1] = hi2;
+      output_asm_insn ("sha\t%0, %1, -24", xoperands);
+      output_asm_insn ("jeq\t%0, 0, 10f", operands);
+      xoperands[0] = operands[0];
+      xoperands[1] = operands[0];
+      xoperands[2] = operands[6];
+      output_asm_insn ("sub\t%0, %1, %2", xoperands);
+      output_asm_insn ("jne\t%0, 0, 6f", operands);
+      }
+
+      if (TImode == <MODE>mode)
+      {
+      // Compare 4 character (word3)
+      output_asm_insn ("3:", operands);
+
+      xoperands[0] = operands[0];
+      xoperands[1] = lohi1;
+      output_asm_insn ("extr\t%0, %1, 0, 8", xoperands);
+      xoperands[0] = operands[6];
+      xoperands[1] = lohi2;
+      output_asm_insn ("extr\t%0, %1, 0, 8", xoperands);
+      output_asm_insn ("jeq\t%0, 0, 10f", operands);
+      xoperands[0] = operands[0];
+      xoperands[1] = operands[0];
+      xoperands[2] = operands[6];
+      output_asm_insn ("sub\t%0, %1, %2", xoperands);
+      output_asm_insn ("jne\t%0, 0, 6f", operands);
+
+      xoperands[0] = operands[0];
+      xoperands[1] = lohi1;
+      output_asm_insn ("extr\t%0, %1, 8, 8", xoperands);
+      xoperands[0] = operands[6];
+      xoperands[1] = lohi2;
+      output_asm_insn ("extr\t%0, %1, 8, 8", xoperands);
+      output_asm_insn ("jeq\t%0, 0, 10f", operands);
+      xoperands[0] = operands[0];
+      xoperands[1] = operands[0];
+      xoperands[2] = operands[6];
+      output_asm_insn ("sub\t%0, %1, %2", xoperands);
+      output_asm_insn ("jne\t%0, 0, 6f", operands);
+
+      xoperands[0] = operands[0];
+      xoperands[1] = lohi1;
+      output_asm_insn ("extr\t%0, %1, 16, 8", xoperands);
+      xoperands[0] = operands[6];
+      xoperands[1] = lohi2;
+      output_asm_insn ("extr\t%0, %1, 16, 8", xoperands);
+      output_asm_insn ("jeq\t%0, 0, 10f", operands);
+      xoperands[0] = operands[0];
+      xoperands[1] = operands[0];
+      xoperands[2] = operands[6];
+      output_asm_insn ("sub\t%0, %1, %2", xoperands);
+      output_asm_insn ("jne\t%0, 0, 6f", operands);
+
+      xoperands[0] = operands[0];
+      xoperands[1] = lohi1;
+      output_asm_insn ("sha\t%0, %1, -24", xoperands);
+      xoperands[0] = operands[6];
+      xoperands[1] = lohi2;
+      output_asm_insn ("sha\t%0, %1, -24", xoperands);
+      output_asm_insn ("jeq\t%0, 0, 10f", operands);
+      xoperands[0] = operands[0];
+      xoperands[1] = operands[0];
+      xoperands[2] = operands[6];
+      output_asm_insn ("sub\t%0, %1, %2", xoperands);
+      output_asm_insn ("jne\t%0, 0, 6f", operands);
+
+      // Compare 4 character (word4)
+      output_asm_insn ("4:", operands);
+
+      xoperands[0] = operands[0];
+      xoperands[1] = hihi1;
+      output_asm_insn ("extr\t%0, %1, 0, 8", xoperands);
+      xoperands[0] = operands[6];
+      xoperands[1] = hihi2;
+      output_asm_insn ("extr\t%0, %1, 0, 8", xoperands);
+      output_asm_insn ("jeq\t%0, 0, 10f", operands);
+      xoperands[0] = operands[0];
+      xoperands[1] = operands[0];
+      xoperands[2] = operands[6];
+      output_asm_insn ("sub\t%0, %1, %2", xoperands);
+      output_asm_insn ("jne\t%0, 0, 6f", operands);
+
+      xoperands[0] = operands[0];
+      xoperands[1] = hihi1;
+      output_asm_insn ("extr\t%0, %1, 8, 8", xoperands);
+      xoperands[0] = operands[6];
+      xoperands[1] = hihi2;
+      output_asm_insn ("extr\t%0, %1, 8, 8", xoperands);
+      output_asm_insn ("jeq\t%0, 0, 10f", operands);
+      xoperands[0] = operands[0];
+      xoperands[1] = operands[0];
+      xoperands[2] = operands[6];
+      output_asm_insn ("sub\t%0, %1, %2", xoperands);
+      output_asm_insn ("jne\t%0, 0, 6f", operands);
+
+      xoperands[0] = operands[0];
+      xoperands[1] = hihi1;
+      output_asm_insn ("extr\t%0, %1, 16, 8", xoperands);
+      xoperands[0] = operands[6];
+      xoperands[1] = hihi2;
+      output_asm_insn ("extr\t%0, %1, 16, 8", xoperands);
+      output_asm_insn ("jeq\t%0, 0, 10f", operands);
+      xoperands[0] = operands[0];
+      xoperands[1] = operands[0];
+      xoperands[2] = operands[6];
+      output_asm_insn ("sub\t%0, %1, %2", xoperands);
+      output_asm_insn ("jne\t%0, 0, 6f", operands);
+
+      xoperands[0] = operands[0];
+      xoperands[1] = hihi1;
+      output_asm_insn ("sha\t%0, %1, -24", xoperands);
+      xoperands[0] = operands[6];
+      xoperands[1] = hi2;
+      output_asm_insn ("sha\t%0, %1, -24", xoperands);
+      output_asm_insn ("jeq\t%0, 0, 10f", operands);
+      xoperands[0] = operands[0];
+      xoperands[1] = operands[0];
+      xoperands[2] = operands[6];
+      output_asm_insn ("sub\t%0, %1, %2", xoperands);
+      } 
+
+      // Perform subtract on one character
+      output_asm_insn ("10:", operands);
+      xoperands[0] = operands[0];
+      xoperands[1] = operands[0];
+      xoperands[2] = operands[6];
+      output_asm_insn ("sub\t%0, %1, %2", xoperands);
+
+      output_asm_insn ("6:", operands);
+
+      return "";
+    })
 
 (define_expand "nopv"
   [(parallel [(unspec_volatile [(const_int 0)]
@@ -4738,6 +5163,37 @@ skip_loop:;
   [(set_attr "length" "0")])
 
 
+
+
+;;(define_peephole2
+;;  [(set (match_operand:SI 0 "register_operand"         "")
+;;        (lo_sum:SI (match_operand:SI 1 "register_operand"  "")
+;;                   (match_operand:SI 2 "immediate_operand" "")))
+;;  (set (mem:SI (match_dup 0))
+;;       (match_operand:SI 3 "register_operand"     ""))]
+;;  "TRIC_16UP"
+;;  [(set (match_dup 0)
+;;        (lo_sum:SI (match_dup 1)
+;;                   (match_dup 2)))
+;;   (set (mem:SI (plus:SI (match_dup 1) (match_dup 2)))
+;;        (match_dup 3))]
+;;  { })
+
+
+;;(define_insn "*store_lo"
+;; [(set (mem:SI (plus:SI (match_operand:SI 0 "register_operand"  " =d, a")
+;;                        (match_operand:SI 1 "immediate_operand" "  i, i")))
+;;               (match_operand:SI 2 "register_operand"           "  d, a"))]
+;; "TRIC_16UP"
+;; "@
+;;  st.w\t[%0] lo:%1, %2
+;;  st.a\t[%0] lo:%1, %2"
+;;[(set_attr "pipe"   "std,sta")
+;; (set_attr "isa"    "*,*")
+;; (set_attr "length" "*,*")
+;; (set_attr "adjust" "mov32,mov32")]
+;;)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (include "tricore-combine.md")
 (include "tricore-map.md")
