@@ -4376,7 +4376,7 @@ tric_can_move_immediate_p (rtx reg, rtx x)
 bool
 tric_emit_move (rtx *operands, enum machine_mode mode)
 {
-	RTX_CODE code1;
+	RTX_CODE code0, code1;
 
 	/* One of the ops has to be in a register.  */
 	if (!register_operand (operands[0], mode)
@@ -4425,7 +4425,6 @@ tric_emit_move (rtx *operands, enum machine_mode mode)
 		{
 			return false;
 		}
-
 
 		addr = copy_to_mode_reg (Pmode, addr);
 
@@ -4483,7 +4482,6 @@ tric_emit_move (rtx *operands, enum machine_mode mode)
 					&& !CONST_INT_P (operands[1])
 					&& !CONST_DOUBLE_P (operands[1])))
 	{
-
 		if (!register_operand (operands[0], mode))
 		{
 			gcc_assert (can_create_pseudo_p());
@@ -4518,12 +4516,12 @@ tric_emit_move (rtx *operands, enum machine_mode mode)
 			return false;
 		}
 		{
-
 			emit_insn (gen_movsi_high (reg, operands[1]));
 			emit_insn (gen_addsi_low (operands[0], reg, operands[1]));
 		}
 		return true;
 	}
+
 	return false;
 }
 
@@ -7031,7 +7029,7 @@ bool copy_constant_string (rtx_insn *insn_ref, rtx *operands)
       pointer++;
     }
     leftover_2 = (uint16_t *) pointer;
-    if ((len%4) && 3)
+    if ((len%4) & 2)
     {
       xoperands[1] = gen_rtx_CONST_INT ( GET_MODE (operands[7]), (len/4)*4);
       xoperands[3] = gen_rtx_CONST_INT ( GET_MODE (operands[7]), *leftover_2);
@@ -7040,7 +7038,7 @@ bool copy_constant_string (rtx_insn *insn_ref, rtx *operands)
       leftover_2++;
     }
     leftover_1 = (uint8_t *) leftover_2;
-    if ((len%4) && 1)
+    if ((len%4) & 1)
     {
       xoperands[1] = gen_rtx_CONST_INT ( GET_MODE (operands[7]), len-1);
       xoperands[3] = gen_rtx_CONST_INT ( GET_MODE (operands[7]), *leftover_1);
@@ -7188,23 +7186,6 @@ tric_output_call (rtx insn, rtx *operands, int value_p)
   int sibling_p = CALLCOOKIE_SIBLING_MASK & cookie;
   int pxhndcall_p = CALLCOOKIE_PXHNDCALL_MASK & cookie;
   int noreturn_p = NULL_RTX != find_reg_note (insn, REG_NORETURN, NULL);
-//  int fcall_p = 0;
-
-  /* Check if fcall is possible */
-//  rtx callee = XEXP (addr, 0);
-//  printf("*** %x\n", cfun);
-//  if (GET_CODE (addr) == SYMBOL_REF)
-//  {
-//    struct function *func = DECL_STRUCT_FUNCTION (SYMBOL_REF_DECL (addr));
-//    const char * fname = XSTR (addr, 0);
-    ////// debug_tree(SYMBOL_REF_DECL (addr));
-   ///////  printf("name = %s fcall = %d, FUNC_DECL = %d, f = %x\n", fname, fcall_p, TREE_CODE (SYMBOL_REF_DECL (addr)) == FUNCTION_DECL, func);
-    //printf("%x\n", SYMBOL_REF_DECL (addr));
-
-    //fcall_p = !(func->machine->use_upper_context);
-
-    //printf("name = %s fcall = %d\n", fname, fcall_p);
-//  }
 
   /* Compute register mask of passed regs */
   if (sibling_p || pxhndcall_p || flag_verbose_asm || flag_print_asm_name)
@@ -7275,7 +7256,7 @@ tric_output_call (rtx insn, rtx *operands, int value_p)
     }
 
   if (find_reg_note (insn, REG_SETJMP, NULL)
-      || (cookie & CALLCOOKIE_USE_CALL_MASK) /*|| fcall_p*/)
+      || (cookie & CALLCOOKIE_USE_CALL_MASK))
     {
       sibling_p = 0;
     }
@@ -7283,7 +7264,7 @@ tric_output_call (rtx insn, rtx *operands, int value_p)
   if (CONST_INT_P (addr))
     output_asm_insn (sibling_p ? "ja\t%0" : "calla\t%0", &addr);
   else
-    output_asm_insn (sibling_p ? "j%I0\t%0" : (/*fcall_p*/false? "fcall%I0\t%0" : "call%I0\t%0"), &addr);
+    output_asm_insn (sibling_p ? "j%I0\t%0" : "call%I0\t%0", &addr);
 }
 
 
@@ -10707,7 +10688,6 @@ return false;
 
 }
 
-
 /* Implement `TARGET_SET_CURRENT_FUNCTION'.  */
 static void
 tricore_set_current_function (tree decl)
@@ -10719,28 +10699,6 @@ tricore_set_current_function (tree decl)
       || current_function_decl == error_mark_node
       || ! cfun->machine)
     return;
-
-  /* check if the function uses registers included in the upper context */
-  cfun->machine->use_upper_context = 0;
-  for (regno = REG_D8; regno <= REG_D15; regno++)
-  {
-    if (df_regs_ever_live_p (regno))
-    {
-      cfun->machine->use_upper_context = 1;
-      break;
-    }
-  }
-  for (regno = REG_A12; !cfun->machine->use_upper_context && regno <= REG_A15; regno++)
-  {
-    if (df_regs_ever_live_p (regno))
-    {
-      cfun->machine->use_upper_context = 1;
-    }
-  }
-  if (df_regs_ever_live_p (REG_PSW))
-  {
-    cfun->machine->use_upper_context = 1;
-  }
 }
 
 /***********************************************************************

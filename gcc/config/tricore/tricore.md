@@ -317,6 +317,20 @@
     movh.a\t%0, hi:%1"
   [(set_attr "pipe" "ip,aalu")])
 
+(define_insn "load_lo"
+ [(set (match_operand:SI 0 "register_operand"                     "=d, a")
+       (mem:SI (lo_sum:SI (match_operand:SI 1 "register_operand"  " a, a")
+                          (match_operand:SI 2 "immediate_operand" " i, i"))))]
+ "TRIC_16UP"
+ "@
+  ld.w\t%0, [%1] lo:%2
+  ld.a\t%0, [%1] lo:%2"
+[(set_attr "pipe"   "ldd,lda")
+ (set_attr "isa"    "*,*")
+ (set_attr "length" "*,*")
+ (set_attr "adjust" "mov32,mov32")]
+)
+
 (define_insn "addsi_low"
   [(set (match_operand:SI 0 "register_operand"             "=*d,*d,a")
         (lo_sum:SI (match_operand:SI 1 "register_operand"   "0 ,d ,a")
@@ -368,6 +382,21 @@
     if (tric_emit_move (operands, SFmode))
       DONE;
   })
+
+(define_insn "store_lo"
+ [(set (mem:SI (lo_sum:SI (match_operand:SI 0 "register_operand"  "  a, a")
+                          (match_operand:SI 1 "immediate_operand" "  i, i")))
+               (match_operand:SI 2 "register_operand"             "  d, a"))]
+ "TRIC_16UP"
+ "@
+  st.w\t[%0] lo:%1, %2
+  st.a\t[%0] lo:%1, %2"
+[(set_attr "pipe"   "std,sta")
+ (set_attr "isa"    "*,*")
+ (set_attr "length" "*,*")
+ (set_attr "adjust" "mov32,mov32")]
+)
+
 
 (define_insn "*movsi_insn"
   [(set (match_operand:SI 0 "nonimmediate_operand" "=d    ,a,a  ,!*????a,!*????d,Wm,d ,D ,Wa,a ,RnS,A ,D  ,a ,a     ,d  ,d  ,a  ,d  ,*a ,!a,!d")
@@ -4610,13 +4639,17 @@ skip_loop:;
   {
     rtx str1, str2;
     enum machine_mode mode;
+    int align;
+    align =  OPVAL (3);
 
-    if (TRIC_18UP)
+    if (TRIC_18UP && align >= 16)
       mode = TImode;
-    else if (TRIC_131UP)
+    else if (TRIC_131UP && align >= 8)
       mode = DImode;
-    else
+    else if (align >= 4)
       mode = SImode;
+    else
+      FAIL;
 
     str1 = copy_to_mode_reg (Pmode, XEXP (operands[1], 0));
     str2 = copy_to_mode_reg (Pmode, XEXP (operands[2], 0));
@@ -4763,6 +4796,8 @@ skip_loop:;
         xoperands[2] = lo2;
         output_asm_insn ("sub\t%0, %1, %2", xoperands);
         output_asm_insn ("jne\t%0, 0, 1f", xoperands);
+
+        output_asm_insn ("j\t0b", operands);
       }
 
       // Compare 4 character (word1)
@@ -4981,13 +5016,14 @@ skip_loop:;
       xoperands[1] = hihi1;
       output_asm_insn ("sha\t%0, %1, -24", xoperands);
       xoperands[0] = operands[6];
-      xoperands[1] = hi2;
+      xoperands[1] = hihi2;
       output_asm_insn ("sha\t%0, %1, -24", xoperands);
       output_asm_insn ("jeq\t%0, 0, 10f", operands);
       xoperands[0] = operands[0];
       xoperands[1] = operands[0];
       xoperands[2] = operands[6];
       output_asm_insn ("sub\t%0, %1, %2", xoperands);
+      output_asm_insn ("jne\t%0, 0, 6f", operands);
       } 
 
       // Perform subtract on one character
@@ -5164,35 +5200,6 @@ skip_loop:;
 
 
 
-
-;;(define_peephole2
-;;  [(set (match_operand:SI 0 "register_operand"         "")
-;;        (lo_sum:SI (match_operand:SI 1 "register_operand"  "")
-;;                   (match_operand:SI 2 "immediate_operand" "")))
-;;  (set (mem:SI (match_dup 0))
-;;       (match_operand:SI 3 "register_operand"     ""))]
-;;  "TRIC_16UP"
-;;  [(set (match_dup 0)
-;;        (lo_sum:SI (match_dup 1)
-;;                   (match_dup 2)))
-;;   (set (mem:SI (plus:SI (match_dup 1) (match_dup 2)))
-;;        (match_dup 3))]
-;;  { })
-
-
-;;(define_insn "*store_lo"
-;; [(set (mem:SI (plus:SI (match_operand:SI 0 "register_operand"  " =d, a")
-;;                        (match_operand:SI 1 "immediate_operand" "  i, i")))
-;;               (match_operand:SI 2 "register_operand"           "  d, a"))]
-;; "TRIC_16UP"
-;; "@
-;;  st.w\t[%0] lo:%1, %2
-;;  st.a\t[%0] lo:%1, %2"
-;;[(set_attr "pipe"   "std,sta")
-;; (set_attr "isa"    "*,*")
-;; (set_attr "length" "*,*")
-;; (set_attr "adjust" "mov32,mov32")]
-;;)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (include "tricore-combine.md")
