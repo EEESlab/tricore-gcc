@@ -10,6 +10,8 @@
 
 (define_mode_iterator SIDI    [(SI "") (DI "")])
 
+(define_mode_iterator SIDITI    [(SI "") (DI "") (TI "")])
+
 (define_mode_iterator DIDF    [(DI "") (DF "")])
 (define_mode_iterator DIPDI   [(DI "") (PDI "")])
 (define_mode_iterator DIPDIDF [(DI "") (DF "") (PDI "")])

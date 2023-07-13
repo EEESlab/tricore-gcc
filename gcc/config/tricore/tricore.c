@@ -56,6 +56,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "tm-constrs.h"
 #include "rtl-iter.h"
 #include "print-rtl.h"
+#include "tree-ssa-alias.h"
 
 /* This file should be included last.  */
 #include "target-def.h"
@@ -142,6 +143,8 @@ static unsigned long tric_section_flags_from_string (const char *s_flags);
 static void tric_section_flags_from_flags (char *f, unsigned int flags);
 static tric_section_t *tric_text_section;
 static tric_section_t* tric_data_section_ext[SS1_MAX][SS2_MAX][SS3_MAX];
+static void tric_asm_file_end_callinfo (void);
+
 
 #define tric_zbss_section (tric_data_section[SS_ABSOLUTE][SS_BSS][0])
 #define tric_zbss_section_ext (tric_data_section_ext[SS_ABSOLUTE][SS_BSS][0])
@@ -211,6 +214,13 @@ static inline bool tric_symbol_ref_small16_p (const_rtx);
 static void tric_print_operand (FILE*, rtx, int);
 
 static rtx tric_arith_CONST_INT (rtx, rtx, rtx, rtx);
+
+static const char *callinfo_label[10000];
+static unsigned int callinfo_regsused[10000];
+static unsigned int callinfo_argsused[10000];
+static unsigned int callinfo_retsused[10000];
+static unsigned int callinfo_statused[10000];
+static int len_callinfo;
 
 /***********************************************************************
  ** Miscellaneous Support Functions
@@ -2612,7 +2622,7 @@ tric_section_flags_from_string (const char *s_flags)
 static void
 tric_asm_file_end (void)
 {
-
+  tric_asm_file_end_callinfo();
 }
 
 
@@ -2777,6 +2787,139 @@ tric_simple_epilogue (void)
   return 1;
 }
 
+static void
+tric_asm_function_prologue(FILE *file ATTRIBUTE_UNUSED)
+{
+  unsigned int mask = 0;
+  int regno;
+  /* Only print this info for -fverbose-asm or -dp */
+  mask = 0;
+  for (regno = REG_D0; regno <= REG_A15; regno++)
+    if (df_regs_ever_live_p(regno))
+      mask |= (1 << regno);
+
+  /* Fill up the callinfo data structure used for fcall/fret late link optimization */
+  callinfo_label[len_callinfo] = get_fnname_from_decl(current_function_decl);
+  if (callinfo_label[len_callinfo][0] == '*')
+  {
+    // is aliased
+    const char *aliased_name;
+    aliased_name = get_fnname_from_decl(current_function_decl);
+    callinfo_label[len_callinfo] = &aliased_name[1];
+  }
+  callinfo_regsused[len_callinfo] = mask;
+  callinfo_argsused[len_callinfo] = crtl->args.info.args_mask;
+  callinfo_retsused[len_callinfo] = 0;
+  if (crtl->return_rtx != NULL_RTX)
+  {
+    if (REG_P(crtl->return_rtx))
+    {
+      if (GET_MODE(crtl->return_rtx) == SImode || GET_MODE(crtl->return_rtx) == SFmode)
+      {
+          callinfo_retsused[len_callinfo] = 1 << REGNO(crtl->return_rtx);
+      }
+      if (GET_MODE(crtl->return_rtx) == DImode || GET_MODE(crtl->return_rtx) == DFmode)
+      {
+          callinfo_retsused[len_callinfo] = 1 << REGNO(crtl->return_rtx);
+          callinfo_retsused[len_callinfo] |= 1 << (REGNO(crtl->return_rtx) + 1);
+      }
+      if (GET_MODE(crtl->return_rtx) == TImode)
+      {
+          callinfo_retsused[len_callinfo] = 1 << REGNO(crtl->return_rtx);
+          callinfo_retsused[len_callinfo] |= 1 << (REGNO(crtl->return_rtx) + 1);
+          callinfo_retsused[len_callinfo] |= 1 << (REGNO(crtl->return_rtx) + 2);
+          callinfo_retsused[len_callinfo] |= 1 << (REGNO(crtl->return_rtx) + 3);
+      }
+    }
+  }
+}
+
+void tric_print_dfregs_bb(basic_block bb, FILE *file)
+{
+
+  bitmap r;
+  int i;
+  unsigned int regs;
+
+  FOR_EACH_BB_FN(bb, cfun)
+  {
+    fprintf(file,    "#bb %d\n", bb->index);
+    r = DF_LR_IN(bb);
+    fprintf(file, "# DF_LR_IN                 ");
+    regs = 0;
+    for (i = 0; i < 32; i += 1)
+    {
+      if (bitmap_bit_p(r, i))
+      {
+          regs = regs | (1 << i);
+          // bitmap_clear_bit (r, i);
+      }
+    }
+    fprintf(file, "%8.8x \n", regs);
+    r = DF_LR_OUT(bb);
+    fprintf(file, "# DF_LR_OUT                 ");
+    regs = 0;
+    for (i = 0; i < 32; i += 1)
+    {
+      if (bitmap_bit_p(r, i))
+      {
+          regs = regs | (1 << i);
+          // bitmap_clear_bit (r, i);
+      }
+    }
+    if (df_live)
+    {
+      r = DF_LIVE_IN(bb);
+      fprintf(file, "# DF_LIVE_IN               ");
+      regs = 0;
+      for (i = 0; i < 32; i += 1)
+      {
+          if (bitmap_bit_p(r, i))
+          {
+        regs = regs | (1 << i);
+        // bitmap_clear_bit (r, i);
+          }
+      }
+      fprintf(file, "%8.8x \n", regs);
+      r = DF_LIVE_OUT(bb);
+      fprintf(file, "# DF_LIVE_OUT               ");
+      regs = 0;
+      for (i = 0; i < 32; i += 1)
+      {
+          if (bitmap_bit_p(r, i))
+          {
+        regs = regs | (1 << i);
+        // bitmap_clear_bit (r, i);
+          }
+      }
+      fprintf(file, "%8.8x \n", regs);
+      r = &DF_LIVE_BB_INFO(bb)->gen;
+      fprintf(file, "# DF_LIVE_BB_INFO (bb)->gen ");
+      regs = 0;
+      for (i = 0; i < 32; i += 1)
+      {
+          if (bitmap_bit_p(r, i))
+          {
+        regs = regs | (1 << i);
+        // bitmap_clear_bit (r, i);
+          }
+      }
+      fprintf(file, "%8.8x \n", regs);
+      r = &DF_LIVE_BB_INFO(bb)->kill;
+      fprintf(file, "# DF_LIVE_BB_INFO (bb)->kill ");
+      regs = 0;
+      for (i = 0; i < 32; i += 1)
+      {
+          if (bitmap_bit_p(r, i))
+          {
+        regs = regs | (1 << i);
+        // bitmap_clear_bit (r, i);
+          }
+      }
+      fprintf(file, "%8.8x \n", regs);
+    }
+  }
+}
 
 /* Implement `TARGET_ASM_FUNCTION_END_PROLOGUE' */
 /* Output summary after end of function prologue.  */
@@ -2786,6 +2929,12 @@ tric_asm_function_end_prologue (FILE *file)
 {
   int mask = 0;
   int regno;
+
+  if (flag_verbose_asm || flag_print_asm_name)
+  {
+    basic_block bb = BLOCK_FOR_INSN (get_insns());
+    tric_print_dfregs_bb(bb, file);
+  }
 
   /* Only print this info for -fverbose-asm or -dp */
   
@@ -2803,7 +2952,20 @@ tric_asm_function_end_prologue (FILE *file)
                cfun->has_forced_label_in_static);
       fprintf (file, ASM_COMMENT_START " cfun->is_thunk = %d\n",
                cfun->is_thunk);
-
+      fprintf (file, ASM_COMMENT_START " cfun->tail_call_marked = %d\n",
+               cfun->tail_call_marked);
+      fprintf (file, ASM_COMMENT_START " cfun->stdarg = %d\n",
+               cfun->stdarg);
+      fprintf (file, ASM_COMMENT_START " cfun->machine->sibcall = %d\n",
+               cfun->machine->sibcall);
+      fprintf (file, ASM_COMMENT_START " cfun->machine->noreturn = %d\n",
+               cfun->machine->noreturn);
+      fprintf (file, ASM_COMMENT_START " cfun->machine->calls = %d\n",
+               cfun->machine->calls);
+      fprintf (file, ASM_COMMENT_START " cfun->machine->is_leaf = %d\n",
+               cfun->machine->is_leaf);
+      fprintf (file, ASM_COMMENT_START " cfun->machine->is_interrupt = %d\n",
+               cfun->machine->is_interrupt);
       fprintf (file, ASM_COMMENT_START " frame-pointer needed = %d\n",
                frame_pointer_needed);
 
@@ -2812,7 +2974,21 @@ tric_asm_function_end_prologue (FILE *file)
 
       fprintf (file, ASM_COMMENT_START " outgoing args size   = %lld\n",
                (long long) crtl->outgoing_args_size);
+      fprintf (file, ASM_COMMENT_START " args on stack   = %lld\n",
+               (long long) crtl->args.info.args_onstack);
 
+      tree fndecl = current_function_decl;
+
+      if (DECL_RESULT (fndecl)!=NULL)
+	{
+	      if (aggregate_value_p (DECL_RESULT (fndecl), fndecl))
+		{
+		  if (int_size_in_bytes (TREE_TYPE(DECL_RESULT (fndecl)))>8)
+		    cfun->machine->ret_on_stack=1;
+		}
+	}
+      fprintf (file, ASM_COMMENT_START " ret  on stack   = %d\n",
+	       cfun->machine->ret_on_stack);
       fprintf (file, ASM_COMMENT_START " incoming args        = ");
 
 
@@ -2840,6 +3016,14 @@ tric_asm_function_end_prologue (FILE *file)
 
       fprintf (file, ASM_COMMENT_START " function is leaf     = %d\n",
                crtl->is_leaf);
+      fprintf (file, ASM_COMMENT_START " function crtl->tail_call_emit     = %d\n",
+               crtl->tail_call_emit);
+      fprintf (file, ASM_COMMENT_START " function crtl->has_asm_statement     = %d\n",
+               crtl->has_asm_statement);
+      fprintf (file, ASM_COMMENT_START " function crtl->has_nonlocal_goto     = %d\n",
+               crtl->has_nonlocal_goto);
+      fprintf (file, ASM_COMMENT_START " function crtl->uses_only_leaf_regs     = %d\n",
+               crtl->uses_only_leaf_regs);
     }
 }
 
@@ -2870,7 +3054,91 @@ tric_asm_function_begin_epilogue (FILE *file)
     }
 }
 
-
+void tric_asm_output_end_function(FILE *file, const char *fnname, tree decl ATTRIBUTE_UNUSED)
+{
+
+    /* We output a nop after noreturn calls at the very end of the function to
+       ensure that the return address always remains in the caller's code range,
+       as not doing so might confuse unwinding engines.  */
+    /* End the function.  */
+    //      .size   interruptHandlerInstall, .-interruptHandlerInstall
+    callinfo_statused[len_callinfo] = 0;
+    if (cfun->calls_alloca == 1)
+      callinfo_statused[len_callinfo] |= 0x00000001;
+    if (cfun->calls_setjmp == 1)
+      callinfo_statused[len_callinfo] |= 0x00000002;
+    if (cfun->has_nonlocal_label == 1)
+      callinfo_statused[len_callinfo] |= 0x00000004;
+    if (cfun->has_forced_label_in_static == 1)
+      callinfo_statused[len_callinfo] |= 0x00000008;
+    if (cfun->is_thunk == 1)
+      callinfo_statused[len_callinfo] |= 0x00000010;
+    if (cfun->tail_call_marked == 1)
+      callinfo_statused[len_callinfo] |= 0x00000020;
+    if (frame_pointer_needed == 1)
+      callinfo_statused[len_callinfo] |= 0x00000040;
+    if (crtl->is_leaf == 1)
+      callinfo_statused[len_callinfo] |= 0x00000080;
+    if (crtl->has_asm_statement == 1)
+      callinfo_statused[len_callinfo] |= 0x00000100;
+    if (crtl->has_nonlocal_goto == 1)
+      callinfo_statused[len_callinfo] |= 0x00000200;
+    if (crtl->uses_only_leaf_regs == 1)
+      callinfo_statused[len_callinfo] |= 0x00000400;
+    if (cfun->machine->sibcall != 0)
+      callinfo_statused[len_callinfo] |= 0x00000800;
+    if (cfun->machine->noreturn != 0)
+      callinfo_statused[len_callinfo] |= 0x00001000;
+    if (cfun->machine->is_leaf != 0)
+      callinfo_statused[len_callinfo] |= 0x00002000;
+    if (cfun->machine->is_interrupt != 0)
+      callinfo_statused[len_callinfo] |= 0x00004000;
+    if (get_frame_size() != 0)
+      callinfo_statused[len_callinfo] |= 0x00008000;
+    if (crtl->outgoing_args_size != 0)
+      callinfo_statused[len_callinfo] |= 0x00010000;
+    if (cfun->machine->calls != 0)
+      callinfo_statused[len_callinfo] |= 0x00020000;
+    if (crtl->args.info.args_onstack)
+      callinfo_statused[len_callinfo] |= 0x00040000;
+    if (cfun->machine->ret_on_stack)
+      callinfo_statused[len_callinfo] |= 0x00080000;
+    if (cfun->stdarg)
+      callinfo_statused[len_callinfo] |= 0x00100000;
+    if (!(TREE_PUBLIC(decl)))
+      callinfo_statused[len_callinfo] = 0xFFFFFFFF; // do not generate callinfo
+    if (!flag_inhibit_size_directive)
+    {
+      fputs("\t.size ", file);
+      assemble_name(file, fnname);
+      fputs(", .-", file);
+      assemble_name(file, fnname);
+      putc('\n', file);
+    }
+    if (tric_opt_funcinfo)
+    {
+      if (TREE_PUBLIC(decl))
+      {
+        if (DECL_WEAK(cfun->decl))
+        {
+          fputs("\t.weak\t", file);
+          assemble_name(file, fnname);
+          fputs("_end\n", file);
+          callinfo_statused[len_callinfo] = 0xFFFFFFFF;
+        }
+        else
+        {
+          fputs("\t.global\t", file);
+          assemble_name(file, fnname);
+          fputs("_end\n", file);
+        }
+        assemble_name(file, fnname);
+        fputs("_end:\n", file);
+        len_callinfo += 1;
+      }
+    }
+}
+
 /***********************************************************************
  ** Builtins
  ***********************************************************************/
@@ -3210,7 +3478,9 @@ tric_function_ok_for_sibcall (tree decl_callee, tree exp_callee)
   tree fntype_callee, ret_callee, ret_current;
   int callee_irq_p, callee_irqh_p;
   int current_irq_p, current_irqh_p;
-  
+
+  if (flag_optimize_sibling_calls==0) return false;
+
   fntype_callee = TREE_TYPE (CALL_EXPR_FN (exp_callee));
 
   if (decl_callee)
@@ -4425,7 +4695,6 @@ tric_emit_move (rtx *operands, enum machine_mode mode)
 			return false;
 		}
 
-
 		addr = copy_to_mode_reg (Pmode, addr);
 
 		emit_move_insn (replace_equiv_address (operands[0], addr),
@@ -4482,7 +4751,6 @@ tric_emit_move (rtx *operands, enum machine_mode mode)
 					&& !CONST_INT_P (operands[1])
 					&& !CONST_DOUBLE_P (operands[1])))
 	{
-
 		if (!register_operand (operands[0], mode))
 		{
 			gcc_assert (can_create_pseudo_p());
@@ -4517,12 +4785,12 @@ tric_emit_move (rtx *operands, enum machine_mode mode)
 			return false;
 		}
 		{
-
 			emit_insn (gen_movsi_high (reg, operands[1]));
 			emit_insn (gen_addsi_low (operands[0], reg, operands[1]));
 		}
 		return true;
 	}
+
 	return false;
 }
 
@@ -6334,6 +6602,7 @@ tric_init_cumulative_args (CUMULATIVE_ARGS *cum, tree fntype,
 
   cum->libfunc_p = 0;
   cum->argno = 0;
+  cum->args_onstack=0;
 
   if (NULL_RTX != libname)
     {
@@ -6461,11 +6730,17 @@ tric_function_arg1 (CUMULATIVE_ARGS *cum, const function_arg_info &arg)
   if (!arg.named
       || 0 == nregs
       || (arg.type && TREE_CODE (TYPE_SIZE (arg.type)) != INTEGER_CST))
-    return NULL_RTX;
+    {
+      cum->args_onstack=1;
+      return NULL_RTX;
+    }
 
   /* Don't pass arguments larger than 64 bits in registers */
   if (nregs > 2)
-    return NULL_RTX;
+    {
+      cum->args_onstack=1;
+      return NULL_RTX;
+    }
 
   if (cum->libfunc_p)
     {
@@ -6483,7 +6758,10 @@ tric_function_arg1 (CUMULATIVE_ARGS *cum, const function_arg_info &arg)
     for (;; regno += nregs, rmask <<= nregs)
     {
       if (rmask & ((1 << REG_A8) | (1 << REG_D8)))
-        return NULL_RTX;
+    {
+      cum->args_onstack=1;
+      return NULL_RTX;
+    }
 
       if (0 == (cum->args_mask & rmask))
         {
@@ -6863,6 +7141,302 @@ tric_call_insn_use_regs_mask (rtx insn)
   return mask;
 }
 
+bool remove_strcmp(rtx_insn *insn_ref, rtx *operands)
+{
+  basic_block block;
+  rtx_insn *insn, *end;
+  tree src1, src2;
+  const char * first_str = 0;
+  const char * second_str = 0;
+  tree dst_first_str, dst_second_str;
+
+  rtx str1 = XVECEXP (XEXP (XVECEXP (XEXP (insn_ref, 3), 0, 0), 1), 0, 0);
+  rtx str2 = XVECEXP (XEXP (XVECEXP (XEXP (insn_ref, 3), 0, 0), 1), 0, 1);
+  tree t1 = MEM_EXPR (str1);
+  tree t2 = MEM_EXPR (str2);
+
+  // Memrefs must be available for both strings
+  if (!t1 || !t2 ||TREE_CODE (t1) != MEM_REF || TREE_CODE (t2) != MEM_REF
+      || TREE_CODE (TREE_OPERAND (t1, 0)) != ADDR_EXPR
+      || TREE_CODE (TREE_OPERAND (t2, 0)) != ADDR_EXPR)
+    return false;
+
+  if (MEM_VOLATILE_P (str1) || MEM_VOLATILE_P (str2))
+    return false;
+
+  // For all BBs in the current function
+  FOR_ALL_BB_FN (block, cfun)
+  {
+    // For all instructions in the current BB
+    FOR_BB_INSNS (block, insn)
+    {
+      // Stop when we encouter the current strcmp insn
+      if(insn == insn_ref) goto end;
+
+      // We consider only standard insns
+      if (!INSN_P (insn))
+        continue;
+
+      int code = recog_memoized (insn);
+
+      // strcpy
+      if (code == CODE_FOR_cpymemsi_qi ||
+          code == CODE_FOR_cpymemsi_si ||
+          code == CODE_FOR_cpymemsi_di ||
+	  code == CODE_FOR_cpymemsi_ti)
+
+      {
+        rtx dst_ = XEXP (XVECEXP (XEXP (insn, 3), 0, 0), 0);
+        tree dst = MEM_EXPR (dst_);
+        if (dst && TREE_CODE (dst) == MEM_REF
+                && TREE_CODE (TREE_OPERAND (dst, 0)) == ADDR_EXPR)
+        {
+	  // Found a ref to str1
+          if (TREE_OPERAND (TREE_OPERAND (t1, 0), 0) == TREE_OPERAND (TREE_OPERAND (dst, 0), 0)) 
+          {
+  	    rtx src_ = XVECEXP (XEXP (XVECEXP (XEXP (insn, 3), 0, 0), 1), 0, 0);
+            src1 = MEM_EXPR (src_);
+	    if (src1 && TREE_CODE (src1) == MEM_REF
+	  	  && TREE_CODE (TREE_OPERAND (src1, 0)) == ADDR_EXPR
+		  && (TREE_CODE (TREE_OPERAND (TREE_OPERAND (src1, 0), 0)) == STRING_CST))
+	    {
+              // Found a string constant
+	      dst_first_str = dst;
+	      first_str = TREE_STRING_POINTER(TREE_OPERAND (TREE_OPERAND (src1, 0), 0));
+	    }
+          }
+	  // Found a ref to str2
+	  else if (TREE_OPERAND (TREE_OPERAND (t2, 0), 0) == TREE_OPERAND (TREE_OPERAND (dst, 0), 0))
+          {
+            rtx src_ = XVECEXP (XEXP (XVECEXP (XEXP (insn, 3), 0, 0), 1), 0, 0);
+            src2 = MEM_EXPR (src_);
+            if (src2 && TREE_CODE (src2) == MEM_REF
+                     && TREE_CODE (TREE_OPERAND (src2, 0)) == ADDR_EXPR
+                     && (TREE_CODE (TREE_OPERAND (TREE_OPERAND (src2, 0), 0)) == STRING_CST)) 
+	    {
+	      // Found a string constant
+	      dst_second_str = dst;
+              second_str = TREE_STRING_POINTER(TREE_OPERAND (TREE_OPERAND (src2, 0), 0));
+	    }
+          }
+	}
+      }
+      // If we found at least one string, we must check other insn to check memory writes
+      else if(first_str || second_str)
+      {
+	// Check if the current insn is a SET
+	rtx curr = XEXP (insn, 3);
+	if (curr && GET_CODE(curr) == SET)
+	{
+          // Check if the first operand is a MEM
+	  rtx first_op = XEXP (curr, 0);
+	  if (GET_CODE(first_op) == MEM)
+	  {
+	    tree t = MEM_EXPR (first_op);
+	    if (t && first_str && refs_may_alias_p(dst_first_str, t))
+              return false;
+	    if (t && second_str && refs_may_alias_p(dst_second_str, t))
+              return false;
+	  }
+	}
+      }
+    }
+  }
+
+end:
+  // If we found both constant strings we can replace with the strcmp result
+  if (first_str && second_str)
+  {
+    int result = strcmp(first_str, second_str);
+    if (result > 0) result = 1;
+    if (result < 0) result = -1;
+    rtx xoperands[2];
+    xoperands[0] = operands[0];
+    xoperands[1] = gen_rtx_CONST_INT ( GET_MODE (operands[0]), result);
+    output_asm_insn ("mov.d\t%0, %1", operands);
+    return true;
+  } 
+  return false;  
+}
+
+
+bool copy_constant_string (rtx_insn *insn_ref, rtx *operands)
+{
+  tree dst_mem, src_mem;
+  unsigned int alignment;
+  const char *str;
+  size_t len;
+  uint32_t *pointer;
+  uint8_t *leftover_1;
+  uint16_t *leftover_2;
+
+  // Check destination buffer
+  dst_mem = MEM_EXPR ( XEXP (XVECEXP (XEXP (insn_ref, 3), 0, 0), 0));
+  if (dst_mem)
+  {
+    alignment = get_object_alignment (dst_mem);
+    if(alignment % 32 != 0) return false;
+  }
+  else
+    return false;
+
+  // Check source data
+  src_mem = MEM_EXPR ( XVECEXP (XEXP (XVECEXP (XEXP (insn_ref, 3), 0, 0), 1), 0, 0));
+  if (src_mem && TREE_CODE (src_mem) == MEM_REF
+      && TREE_CODE (TREE_OPERAND (src_mem, 0)) == ADDR_EXPR
+      && (TREE_CODE (TREE_OPERAND (TREE_OPERAND (src_mem, 0), 0)) == STRING_CST))
+  {
+    rtx xoperands[5];
+
+    // Get string and check length
+    str = TREE_STRING_POINTER(TREE_OPERAND (TREE_OPERAND (src_mem, 0), 0));
+    len = strlen(str) + 1;
+    if (len > 64) return false;
+
+    // Generate assembly
+    xoperands[0] = operands[0];
+    xoperands[2] = operands[5];
+    pointer = (uint32_t *) str;
+    for (int i = 0; i<len/4; i++)
+    {
+      xoperands[1] = gen_rtx_CONST_INT ( GET_MODE (operands[7]), i*4);
+      xoperands[3] = gen_rtx_CONST_INT ( GET_MODE (operands[7]), (*pointer) >> 16);
+      xoperands[4] = gen_rtx_CONST_INT ( GET_MODE (operands[7]), (*pointer) & 0xFFFF);
+      output_asm_insn ("movh\t%2, %3", xoperands);
+      output_asm_insn ("addi\t%2, %2, %4", xoperands);
+      output_asm_insn ("st.w\t[%0]%1, %2", xoperands);
+      pointer++;
+    }
+    leftover_2 = (uint16_t *) pointer;
+    if ((len%4) & 2)
+    {
+      xoperands[1] = gen_rtx_CONST_INT ( GET_MODE (operands[7]), (len/4)*4);
+      xoperands[3] = gen_rtx_CONST_INT ( GET_MODE (operands[7]), *leftover_2);
+      output_asm_insn ("mov\t%2, %3", xoperands);
+      output_asm_insn ("st.h\t[%0]%1, %2", xoperands);
+      leftover_2++;
+    }
+    leftover_1 = (uint8_t *) leftover_2;
+    if ((len%4) & 1)
+    {
+      xoperands[1] = gen_rtx_CONST_INT ( GET_MODE (operands[7]), len-1);
+      xoperands[3] = gen_rtx_CONST_INT ( GET_MODE (operands[7]), *leftover_1);
+      output_asm_insn ("mov\t%2, %3", xoperands);
+      output_asm_insn ("st.b\t[%0]%1, %2", xoperands);      
+    }	    
+    return true;
+  }
+  else
+    return false;
+}
+
+/* If MEM is in the form of [base+offset], extract the two parts
+   of address and set to BASE and OFFSET, otherwise return false
+   after clearing BASE and OFFSET.  */
+
+static bool
+extract_base_offset_in_addr (rtx mem, rtx *base, rtx *offset)
+{
+  rtx addr;
+
+  gcc_assert (MEM_P (mem));
+
+  addr = XEXP (mem, 0);
+
+  /* Strip off const from addresses like (const (addr)).  */
+  if (GET_CODE (addr) == CONST)
+    addr = XEXP (addr, 0);
+
+  if (REG_P (addr))
+    {
+      *base = addr;
+      *offset = const0_rtx;
+      return true;
+    }
+
+  if (GET_CODE (addr) == PLUS
+      && GET_CODE (XEXP (addr, 0)) == REG
+      && CONST_INT_P (XEXP (addr, 1)))
+    {
+      *base = XEXP (addr, 0);
+      *offset = XEXP (addr, 1);
+      return true;
+    }
+
+  *base = NULL_RTX;
+  *offset = NULL_RTX;
+
+  return false;
+}
+
+static bool
+fusion_lea_mem (rtx_insn *insn, rtx *base, rtx *offset, bool *is_mem)
+{
+  rtx x, dest, src;
+
+  gcc_assert (INSN_P (insn));
+  x = PATTERN (insn);
+  if (GET_CODE (x) != SET)
+    return false;
+
+  src = SET_SRC (x);
+  dest = SET_DEST (x);
+  if (REG_P (dest) && GET_CODE (src) == LO_SUM)
+    {
+      *is_mem = false;
+      *base = dest;
+      *offset = NULL_RTX;
+    }
+  else if (MEM_P (src) && REG_P (dest))
+    {
+      *is_mem = true;
+      extract_base_offset_in_addr (src, base, offset);
+    }
+  else if (REG_P (src) && MEM_P (dest))
+    {
+      *is_mem = true;
+      extract_base_offset_in_addr (dest, base, offset);
+    }
+  else
+    return false;
+
+  return (*base != NULL_RTX);
+}
+
+/* Implement the TARGET_SCHED_FUSION_PRIORITY hook. */
+static void
+tricore_sched_fusion_priority (rtx_insn *insn, int max_pri,
+                               int *fusion_pri, int *pri)
+{
+  int tmp;
+  bool is_mem;
+  rtx base, offset;
+
+  tmp = max_pri - 1;
+
+  if (!fusion_lea_mem (insn, &base, &offset, &is_mem))
+  {
+      *pri = 1;
+      *fusion_pri = 1;
+      //printf("fusion_pri = %d, pri = %d \n", fusion_pri, pri);
+      //debug(insn);
+      return;
+  }
+
+  /* LEA goes first.  */
+  if (!is_mem)
+    *fusion_pri = tmp - 2;
+  else
+    *fusion_pri = tmp - 2;
+  tmp /= 2;
+
+  /* INSN with smaller base register goes first.  */
+  tmp -= ((REGNO (base) & 0xff) << 20);
+
+  *pri = tmp;
+
+  return;
+}
 
 /* Print a CALL_INSN. The operands are:
    value_p = 0:
@@ -6891,6 +7465,7 @@ tric_output_call (rtx insn, rtx *operands, int value_p)
   int sibling_p = CALLCOOKIE_SIBLING_MASK & cookie;
   int pxhndcall_p = CALLCOOKIE_PXHNDCALL_MASK & cookie;
   int noreturn_p = NULL_RTX != find_reg_note (insn, REG_NORETURN, NULL);
+  cfun->machine->calls+=1;
 
   /* Compute register mask of passed regs */
   if (sibling_p || pxhndcall_p || flag_verbose_asm || flag_print_asm_name)
@@ -6934,7 +7509,10 @@ tric_output_call (rtx insn, rtx *operands, int value_p)
       op[2] = gen_rtx_CONST_STRING (VOIDmode, ggc_strdup (str));
 
       if (sibling_p)
-        output_asm_insn (ASM_COMMENT_START " outgoing.sibcall%2[%1]: %M0", op);
+        {
+          cfun->machine->sibcall+=1;
+          output_asm_insn (ASM_COMMENT_START " outgoing.sibcall%2[%1]: %M0", op);
+        }
       else
         output_asm_insn (ASM_COMMENT_START " outgoing.call%2[%1]: %M0", op);
     }
@@ -6965,7 +7543,10 @@ tric_output_call (rtx insn, rtx *operands, int value_p)
     {
       sibling_p = 0;
     }
-
+  if (noreturn_p)
+    {
+      cfun->machine->noreturn+=1;
+    }
   if (CONST_INT_P (addr))
     output_asm_insn (sibling_p ? "ja\t%0" : "calla\t%0", &addr);
   else
@@ -9366,8 +9947,13 @@ tric_eabi_round_type_align (tree type, unsigned computed, unsigned specified)
 /* Implement `DATA_ALIGNMENT' */
 
 unsigned
-tric_eabi_data_alignment (tree type ATTRIBUTE_UNUSED, unsigned basic_align)
+tric_eabi_data_alignment (tree type, unsigned basic_align)
 {
+  unsigned best_align = BITS_PER_WORD;
+  if (TREE_CODE (type) == ARRAY_TYPE)
+  {
+    return  best_align>basic_align? best_align: basic_align;
+  }
   return basic_align;
 }
 
@@ -10388,6 +10974,46 @@ return false;
 
 }
 
+void tric_callinfo_label(tree func ATTRIBUTE_UNUSED)
+{
+  rtx label;
+  const char *plabel;
+  plabel = get_fnname_from_decl(current_function_decl);
+  if (plabel[0] == '*')
+    plabel = &plabel[1];
+  label = gen_rtx_CONST_STRING(VOIDmode, ggc_strdup(plabel));
+  output_asm_insn("ret\t#%0", &label);
+}
+
+static void
+tric_asm_file_end_callinfo(void)
+{
+  int i;
+
+  asm_fprintf(asm_out_file, ".section .callinfo\n");
+  for (i = 0; i < len_callinfo; i++)
+  {
+      if (tric_opt_funcinfo && callinfo_statused[i] != 0xFFFFFFFF)
+      {
+        asm_fprintf(asm_out_file, "  .word %s #name\n", callinfo_label[i]);
+        asm_fprintf(asm_out_file, "  .word %s_end #sz\n", callinfo_label[i]);
+        asm_fprintf(asm_out_file, "  .word 0x%8.8x #reg\n", callinfo_regsused[i]);
+        asm_fprintf(asm_out_file, "  .word 0x%8.8x #arg\n", callinfo_argsused[i]);
+        asm_fprintf(asm_out_file, "  .word 0x%8.8x #ret\n", callinfo_retsused[i]);
+        asm_fprintf(asm_out_file, "  .word 0x%8.8x #stat\n", callinfo_statused[i]);
+      }
+  }
+}
+
+static void
+tric_asm_file_start(void)
+{
+  FILE *file = asm_out_file;
+  asm_fprintf(asm_out_file, "# tric_asm_file_start\n");
+  output_file_directive(file, main_input_filename);
+  default_file_start();
+  len_callinfo = 0;
+}
 
 /***********************************************************************
  ** Target Hooks
@@ -10431,8 +11057,14 @@ return false;
 #undef  TARGET_ASM_FUNCTION_END_PROLOGUE
 #define TARGET_ASM_FUNCTION_END_PROLOGUE tric_asm_function_end_prologue
 
+#undef  TARGET_ASM_FUNCTION_PROLOGUE
+#define TARGET_ASM_FUNCTION_PROLOGUE tric_asm_function_prologue
+
 #undef  TARGET_ASM_FUNCTION_BEGIN_EPILOGUE
 #define TARGET_ASM_FUNCTION_BEGIN_EPILOGUE tric_asm_function_begin_epilogue
+
+#undef TARGET_ASM_FILE_START
+#define TARGET_ASM_FILE_START tric_asm_file_start
 
 #undef  TARGET_ASM_FILE_END
 #define TARGET_ASM_FILE_END tric_asm_file_end
@@ -10453,9 +11085,6 @@ return false;
 #define TARGET_PRINT_OPERAND tric_print_operand
 #undef  TARGET_PRINT_OPERAND_ADDRESS
 #define TARGET_PRINT_OPERAND_ADDRESS tric_print_operand_address
-
-#undef  TARGET_FUNCTION_OK_FOR_SIBCALL
-#define TARGET_FUNCTION_OK_FOR_SIBCALL tric_function_ok_for_sibcall
 
 /* Same action as PROMOTE_MODE */
 #undef  TARGET_PROMOTE_FUNCTION_MODE
@@ -10618,6 +11247,9 @@ return false;
 //#undef  TARGET_INVALID_RETURN_TYPE
 //#define TARGET_INVALID_RETURN_TYPE tric_invalid_return_type
 
+#undef  TARGET_FUNCTION_OK_FOR_SIBCALL
+#define TARGET_FUNCTION_OK_FOR_SIBCALL tric_function_ok_for_sibcall
+
 #undef  TARGET_PROMOTED_TYPE
 #define TARGET_PROMOTED_TYPE tric_promoted_type
 
@@ -10645,6 +11277,9 @@ return false;
 //only the hook was added
 #undef  TARGET_HTC_SCHED_MAY_CHANGE_ADDRESS_P
 #define TARGET_HTC_SCHED_MAY_CHANGE_ADDRESS_P tric_sched_may_change_address_p
+
+//#undef TARGET_SCHED_FUSION_PRIORITY
+//#define TARGET_SCHED_FUSION_PRIORITY tricore_sched_fusion_priority
 
 struct gcc_target targetm = TARGET_INITIALIZER;
 

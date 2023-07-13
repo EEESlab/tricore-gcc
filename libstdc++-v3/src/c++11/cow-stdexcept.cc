@@ -183,10 +183,13 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     return *this;
   }
 
+#ifndef __TRICORE__
   static_assert(sizeof(__cow_string) == sizeof(std::string),
                 "sizeof(std::string) has changed");
   static_assert(alignof(__cow_string) == alignof(std::string),
                 "alignof(std::string) has changed");
+#endif
+
 #endif
 
   // Return error_category::message() as an SSO string

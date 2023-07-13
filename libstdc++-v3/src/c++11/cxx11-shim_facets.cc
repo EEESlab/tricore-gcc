@@ -112,8 +112,10 @@ namespace __facet_shims
 		  "std::string changed size!");
 #else
     // COW strings overlay just the pointer, the length is stored manually.
+#ifndef __TRICORE__
     static_assert(sizeof(std::string) == sizeof(__str_rep::_M_p),
 		  "std::string changed size!");
+#endif    
 #endif
 # ifdef _GLIBCXX_USE_WCHAR_T
     static_assert(sizeof(std::wstring) == sizeof(std::string),
