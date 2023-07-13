@@ -268,6 +268,10 @@ tric_option_optimization_table[] =
        to enable -funsigned-bitfields per default like 3.x did and
        thereby apply the same signdness rules to `char' and `short'.  */
     { OPT_LEVELS_ALL, OPT_funsigned_bitfields, NULL, 1 },
+    { OPT_LEVELS_ALL, OPT_foptimize_sibling_calls, NULL, 0 },
+    { OPT_LEVELS_ALL, OPT_fshort_enums, NULL, 0 },
+    { OPT_LEVELS_ALL, OPT_fipa_cp_clone, NULL, 0 },
+    { OPT_LEVELS_3_PLUS, OPT_funroll_loops, NULL, 1 },
     { OPT_LEVELS_NONE, 0, NULL, 0 }
   };
 
@@ -286,7 +290,7 @@ tric_option_init_struct (struct gcc_options *opts ATTRIBUTE_UNUSED)
      1 byte for an enum in the range 0..255 so that it cannot be signed as
      required by the EABI.  */
 
-  flag_short_enums = 1;
+ // flag_short_enums = 1;
 
   flag_aggressive_loop_optimizations = 0;
 }

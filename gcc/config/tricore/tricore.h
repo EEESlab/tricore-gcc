@@ -206,6 +206,7 @@ typedef struct
   int update;               /* internal use: update or not? */
   int this_argno;           /* Number of current argument */
   unsigned int args_mask;   /* Which regs are used as arg */
+  unsigned int args_onstack;
   tric_libfunc_info_t libfunc;
 } CUMULATIVE_ARGS;
 
@@ -334,17 +335,58 @@ extern struct tric_segment_trap tric_segment_trap;
 
 
 /* Order of Allocation of Registers */
-
+/*
 #define REG_ALLOC_ORDER                         \
 {                                               \
-    REG_D0,                                     \
-    REG_D1,                                     \
     REG_D2,                                     \
     REG_D3,                                     \
     REG_D4,                                     \
     REG_D5,                                     \
     REG_D6,                                     \
     REG_D7,                                     \
+    REG_D0,                                     \
+    REG_D1,                                     \
+    REG_D8,                                     \
+    REG_D9,                                     \
+    REG_D10,                                    \
+    REG_D11,                                    \
+    REG_D12,                                    \
+    REG_D13,                                    \
+    REG_D14,                                    \
+    REG_D15,                                    \
+                                                \
+    REG_A4,                                     \
+    REG_A5,                                     \
+    REG_A6,                                     \
+    REG_A7,                                     \
+    REG_A2,                                     \
+    REG_A3,                                     \
+    REG_A12,                                    \
+    REG_A13,                                    \
+    REG_A14,                                    \
+    REG_A15,                                    \
+    REG_A0,                                     \
+    REG_A1,                                     \
+    REG_A8,                                     \
+    REG_A9,                                     \
+    REG_A10,                                    \
+    REG_A11,                                    \
+                                                \
+    REG_ARGP,                                   \
+    REG_PSW                                     \
+}
+*/
+
+#define REG_ALLOC_ORDER                         \
+{                                               \
+    REG_D2,                                     \
+    REG_D3,                                     \
+    REG_D4,                                     \
+    REG_D5,                                     \
+    REG_D6,                                     \
+    REG_D7,                                     \
+    REG_D0,                                     \
+    REG_D1,                                     \
     REG_D8,                                     \
     REG_D9,                                     \
     REG_D10,                                    \
@@ -360,20 +402,21 @@ extern struct tric_segment_trap tric_segment_trap;
     REG_A5,                                     \
     REG_A6,                                     \
     REG_A7,                                     \
-    REG_A0,                                     \
-    REG_A1,                                     \
-    REG_A8,                                     \
-    REG_A9,                                     \
     REG_A12,                                    \
     REG_A13,                                    \
     REG_A14,                                    \
     REG_A15,                                    \
+    REG_A0,                                     \
+    REG_A1,                                     \
+    REG_A8,                                     \
+    REG_A9,                                     \
     REG_A10,                                    \
     REG_A11,                                    \
                                                 \
     REG_ARGP,                                   \
     REG_PSW                                     \
 }
+
 
 #define HONOR_REG_ALLOC_ORDER 1
 
@@ -713,6 +756,10 @@ extern int tric_set_ratio (int);
     fputs (":\n", STREAM);                      \
   } while (0)
 
+#undef ASM_DECLARE_FUNCTION_SIZE
+#define ASM_DECLARE_FUNCTION_SIZE(FILE,NAME,DECL) \
+  tric_asm_output_end_function(FILE,NAME,DECL)
+
 #define ADDR_VEC_ALIGN(NEXT) 2
 
 #define ASM_OUTPUT_ADDR_VEC_ELT(STREAM, VALUE)          \
@@ -757,9 +804,6 @@ struct GTY(()) machine_function
 {
   /* 'true' - if the current function is a leaf function.  */
   int is_leaf;
-
-  /* 'true' - if the current function uses upper context registers.  */
-  int use_upper_context;
     
   /* 'true' - if current function is an interrupt function 
      as specified by the "interrupt" attribute.  */
@@ -770,15 +814,18 @@ struct GTY(()) machine_function
      not provide targetm.function_ok_for_sibcall with
      CUMULATIVE_ARGS and recreation is too painful.
      A starting point may be what s390 is doing. */
+  int noreturn;
+  int sibcall;
   int sibcall_fails;
-
+  int anchor_completed;
+  int anchor_far_completed;
+  int regrename_completed;
+  int calls;
+  int ret_on_stack;
   /* 'true' - if this is a pxhndcall function and we emit a diagnose that
      the function attribute is not used correctly.  This is used to avoid
      that the same diagnose is printed twice.  */
   int bogus_pxhndcall;
-
-  int anchor_completed;
-
   /* Fields holding data with -mcode-pic.  This will only be initialized as
      needed, e.g. if the current function needs dynamic address calculation
      for SYMBOL_REFs and/or LABEL_REFs for a function address or switch.  */

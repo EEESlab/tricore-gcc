@@ -105,6 +105,10 @@ mconst-anchor
 Target UInteger Var(tric_opt_const_anchor) Init(1)
 Internal use only. Try to find anchors for loading compile time constants.  Default is ON.
 
+mfuncinfo
+Target UInteger Var(tric_opt_funcinfo) Init(1)
+Generate function info in dedicated section
+
 mstrict-alignment
 Target UInteger Var(tric_opt_strict_alignment) Init(1)
 Internal use only. Move instructions will fail to work when given unaligned data. Default is ON.

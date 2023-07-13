@@ -161,6 +161,7 @@ SIval (rtx x, bool signed_p)
 
 #if defined (TREE_CODE)
 /* Used in md */
+extern void tric_callinfo_label (tree);
 extern int tric_interrupt_function_p (const_tree);
 extern int tric_interrupt_handler_function_p (const_tree);
 extern int tric_pxhndcall_function_p (const_tree);
@@ -168,8 +169,10 @@ extern int tric_longcall_function_p (const_tree);
 extern void tric_asm_output_aligned_var (FILE*, tree, const char*, int, int, int);
 extern void tric_asm_output_subsection (FILE*, section*, tree, int);
 extern void tric_asm_output_external (FILE*, tree, const char*);
+extern void tric_asm_output_end_function (FILE *, const char *, tree);
 extern unsigned tric_eabi_adjust_field_align (tree, unsigned);
 extern unsigned tric_eabi_data_alignment (tree, unsigned);
+extern unsigned tric_eabi_local_alignment (tree, unsigned);
 extern unsigned tric_eabi_round_type_align (tree, unsigned, unsigned);
 #endif /* TREE_CODE */
 

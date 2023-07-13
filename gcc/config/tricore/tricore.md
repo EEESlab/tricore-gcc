@@ -3682,12 +3682,15 @@
   [(return)]
   "reload_completed"
   {
+  char *plabel;
+  char label[128];
+  label[0]=0;
     if (tric_interrupt_function_p (current_function_decl))
       return "ji\t%%A11";
     else if (tric_interrupt_handler_function_p (current_function_decl))
       return "rslcx\;rfe";
-
-    return "ret";
+    tric_callinfo_label (current_function_decl);
+    return "";
   }
   [(set_attr "pipe" "ctx")
    (set_attr "length" "2")])
@@ -4642,9 +4645,10 @@ skip_loop:;
     int align;
     align =  OPVAL (3);
 
+
     if (TRIC_18UP && align >= 16)
       mode = TImode;
-    else if (TRIC_131UP && align >= 8)
+    else if (TRIC_131UP && align >= 8 )
       mode = DImode;
     else if (align >= 4)
       mode = SImode;
@@ -4749,6 +4753,9 @@ skip_loop:;
       }
       else if (DImode == <MODE>mode)
       {
+        
+        for (int rep = 0; rep < 4; rep++)
+        {
         /* Load data from str1 into temp1 */
         output_asm_insn ("ld.<load_suffix>\t%A4, [%7+]%3", operands);
         /* Load data from str2 into temp2 */
@@ -4776,6 +4783,7 @@ skip_loop:;
         xoperands[2] = hi2;
         output_asm_insn ("sub\t%0, %1, %2", xoperands);
         output_asm_insn ("jne\t%0, 0, 2f", xoperands);
+        }
 
         output_asm_insn ("j\t0b", operands);
       }
