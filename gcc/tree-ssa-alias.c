@@ -2043,7 +2043,7 @@ indirect_ref_may_alias_decl_p (tree ref1 ATTRIBUTE_UNUSED, tree base1,
     return true;
 
   /* If the alias set for a pointer access is zero all bets are off.  */
-  if (base1_alias_set == 0 || base2_alias_set == 0)
+  if (base1_alias_set == 0)
     return true;
 
   /* When we are trying to disambiguate an access with a pointer dereference
