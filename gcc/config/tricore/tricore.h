@@ -846,6 +846,8 @@ struct GTY(()) machine_function
        current PC value.  */
     rtx symbol;
   } pic_offset;
+
+  unsigned int crc_sign[8];
 };
 
 struct GTY(()) tric_segment_trap

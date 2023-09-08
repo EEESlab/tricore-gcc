@@ -43,7 +43,7 @@
 ;; fp3  - float (3 cycles) (IP3)
 ;; fpdiv - float div       (IP3)
 
-(define_attr "pipe" "ip,ip2,ipdi,ipds,ip3,ipm,lsp,lp,dual,ctx,jip,aalu,jls,lda,ldd,sta,std,mixdd,mixds,fp,fp2,fp3,fpdiv" 
+(define_attr "pipe" "none,tbc,ip,ip2,ipdi,ipds,ip3,ipm,lsp,lp,dual,ctx,jip,aalu,jls,lda,ldd,sta,std,mixdd,mixds,fp,fp2,fp3,fpdiv" 
   (const_string "ip"))
 
 (define_attr "pipevariant" "standard,tc16x"

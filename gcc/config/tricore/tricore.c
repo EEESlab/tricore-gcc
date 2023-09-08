@@ -57,6 +57,20 @@ along with GCC; see the file COPYING3.  If not see
 #include "rtl-iter.h"
 #include "print-rtl.h"
 #include "tree-ssa-alias.h"
+#include "gimple.h"
+#include "gimple-iterator.h"
+#include "gimplify-me.h"
+#include "gimple-walk.h"
+#include "print-tree.h"
+#include "tree-pretty-print.h"
+#include "gimple-pretty-print.h"
+#include "tree-dump.h"
+#include "langhooks.h"
+#include "tree-iterator.h"
+#include "tree-inline.h"
+#include "tree-nested.h"
+#include "opts.h"
+#include "sched-int.h"
 
 /* This file should be included last.  */
 #include "target-def.h"
@@ -93,6 +107,153 @@ along with GCC; see the file COPYING3.  If not see
 #define TRIC_SYMBOL_FLAG_SMALL    (SYMBOL_FLAG_MACH_DEP << 1)
 #define TRIC_SYMBOL_FLAG_LONGCALL (SYMBOL_FLAG_MACH_DEP << 2)
 #define TRIC_SYMBOL_FLAG_PIC      (SYMBOL_FLAG_MACH_DEP << 3)
+
+/* Information about a node to be dumped.  */
+
+typedef struct dump_node_info_sign
+{
+  /* The index for the node.  */
+  unsigned int index;
+  /* Nonzero if the node is a binfo.  */
+  unsigned int binfo_p : 1;
+} *dump_node_info_sign_p;
+
+/* A dump_info gives information about how we should perform the dump
+   and about the current state of the dump.  */
+typedef struct dump_info_sign *dump_info_sign_p;
+
+struct dump_info_sign
+{
+  char *buf;
+  int buf_len;
+  int buf_max;
+  /* The stream on which to dump the information.  */
+  //FILE *stream; //no stream is used....
+  /* The original node.  */
+  const_tree node;
+  /* User flags.  */
+  dump_flags_t flags;
+  /* The next unused node index.  */
+  unsigned int index;
+  /* The next column.  */
+  unsigned int column;
+  /* The first node in the queue of nodes to be written out.  */
+  dump_queue_p queue;
+  /* The last node in the queue.  */
+  dump_queue_p queue_end;
+  /* Free queue nodes.  */
+  dump_queue_p free_list;
+  /* The tree nodes which we have already written out.  The
+     keys are the addresses of the nodes; the values are the integer
+     indices we assigned them.  */
+  splay_tree nodes;
+};
+
+static const pass_data tric_pass_data_gimple =
+{
+	GIMPLE_PASS,     /* type */
+	"tric-gimple",   /* name */
+	OPTGROUP_NONE,   /* optinfo_flags */
+	TV_NONE,         /* tv_id */
+	PROP_gimple_any, /* properties_required */
+	0,               /* properties_provided */
+	0,               /* properties_destroyed */
+	0,               /* todo_flags_start */
+	0                /* todo_flags_finish */
+};
+
+unsigned int tricopt_gimple_execute(function *function);
+
+class tric_pass_gimple : public gimple_opt_pass
+{
+public:
+  tric_pass_gimple(gcc::context *ctxt)
+      : gimple_opt_pass(tric_pass_data_gimple, ctxt)
+  {
+  }
+
+  virtual bool gate(function *)
+  {
+      return true;
+  }
+  virtual unsigned int execute(function *function)
+  {
+      if (dump_file)
+        fprintf(dump_file, "tric_pass_gimple\n");
+      return tricopt_gimple_execute(function);
+  }
+};
+
+const pass_data tric_pass_data_arg =
+    {
+        RTL_PASS,                            /* type */
+        "tric-arg",                          /* name */
+        OPTGROUP_NONE,                       /* optinfo_flags */
+        TV_NONE,                             /* tv_id */
+        0,                                   /* properties_required */
+        0,                                   /* properties_provided */
+        0,                                   /* properties_destroyed */
+        0,                                   /* todo_flags_start */
+        TODO_df_finish | TODO_df_verify | 0, /* todo_flags_finish */
+};
+
+unsigned int tricopt_execute_arg(function *function);
+
+class tric_pass_arg : public rtl_opt_pass
+{
+public:
+  tric_pass_arg(gcc::context *ctxt)
+      : rtl_opt_pass(tric_pass_data_arg, ctxt)
+  {
+  }
+
+  virtual bool gate(function *)
+  {
+      return true;
+  }
+  virtual unsigned int execute(function *function)
+  {
+      //	  return tric_rest_of_const_anchor ();
+      if (dump_file)
+        fprintf(dump_file, "tric_pass_arg\n");
+      return tricopt_execute_arg(function);
+  }
+};
+
+static const pass_data tric_pass_data_strcmp =
+{
+        GIMPLE_PASS,         /* type */
+        "tric-strcmp",       /* name */
+        OPTGROUP_NONE,       /* optinfo_flags */
+        TV_NONE,             /* tv_id */
+        PROP_cfg | PROP_ssa, /* properties_required */
+        0,                   /* properties_provided */
+        0,                   /* properties_destroyed */
+        0,                   /* todo_flags_start */
+        TODO_update_ssa      /* todo_flags_finish */
+};
+
+unsigned int tricopt_strcmp_execute(function *function);
+
+class tric_strcmp_gimple : public gimple_opt_pass
+{
+public:
+  tric_strcmp_gimple(gcc::context *ctxt)
+      : gimple_opt_pass(tric_pass_data_strcmp, ctxt)
+  {
+  }
+
+  virtual bool gate(function *)
+  {
+      return true;
+  }
+  virtual unsigned int execute(function *function)
+  {
+      if (dump_file)
+        fprintf(dump_file, "tric_strcmp_gimple\n");
+      return tricopt_strcmp_execute(function);
+  }
+};
 
 
 /***********************************************************************
@@ -5154,6 +5315,20 @@ tric_register_passes (void)
   register_pass (tric_after_split1_pass,
                  PASS_POS_INSERT_AFTER, "asmcons", 1);
 
+
+  /*some optimization before lower gimple*/
+
+  tric_pass_gimple *tric_before_lower_gimple = new tric_pass_gimple (g);
+  register_pass (tric_before_lower_gimple,
+                 PASS_POS_INSERT_BEFORE, "lower", 1);
+
+  /*some optimization after ssa*/
+
+  tric_strcmp_gimple *tric_after_alias = new tric_strcmp_gimple (g);
+  register_pass (tric_after_alias,
+                 PASS_POS_INSERT_AFTER, "alias", 1);
+
+
   tric_after_split1_pass_number
     = tric_after_split1_pass->get_next_pass_number();
 
@@ -5165,6 +5340,12 @@ tric_register_passes (void)
     = new tric_pass_const_anchor (g);
   register_pass (tric_post_anchor_pass,
                  PASS_POS_INSERT_BEFORE, "split2", 1);
+
+  tric_pass_arg *tric_post_split2
+    = new tric_pass_arg (g);
+  register_pass (tric_post_split2,
+                 PASS_POS_INSERT_AFTER, "split2", 1);
+
 }
 
 
@@ -11016,6 +11197,6228 @@ tric_asm_file_start(void)
 }
 
 /***********************************************************************
+ ** options to improve performance for synthetic benchmarks coremark/dhrystone
+ ***********************************************************************/
+
+tree tricopt_gimple_gen_struct_field_vv(tree source, int nr)
+{
+  tree temp1;
+  tree field = NULL_TREE;
+  tree stel = NULL_TREE;
+  enum tree_code code;
+  code = TREE_CODE(source);
+  if (dump_file)
+      fprintf(dump_file, "%s\n", get_tree_code_name(code));
+  if (dump_file)
+      fprintf(dump_file, "source %s\n", print_generic_expr_to_str(source));
+  if (dump_file)
+      fprintf(dump_file, "source %s\n", print_generic_expr_to_str(TREE_TYPE(source)));
+  if (code == VAR_DECL)
+      if (dump_file)
+        fprintf(dump_file, "VAR_DECL\n");
+  temp1 = TREE_TYPE(source);
+  code = TREE_CODE(temp1);
+  if (dump_file)
+      fprintf(dump_file, "%s\n", get_tree_code_name(code));
+  if (code == RECORD_TYPE)
+      if (dump_file)
+        fprintf(dump_file, "RECORD_TYPE\n");
+  if (dump_file)
+      fprintf(dump_file, "temp1 %s\n", print_generic_expr_to_str(temp1));
+  int i;
+  for (field = TYPE_FIELDS(temp1), i = 0; field; field = DECL_CHAIN(field), i += 1)
+      if (TREE_CODE(field) == FIELD_DECL)
+      {
+        if (i == nr)
+        {
+            stel = field;
+            if (dump_file)
+            fprintf(dump_file, "el=%d %s\n", i, print_generic_expr_to_str(field));
+            break;
+        }
+      }
+  tree new_ptr = create_tmp_var_raw(TYPE_MAIN_VARIANT(temp1));
+  ;
+  if (dump_file)
+      fprintf(dump_file, "new_ptr %s\n", print_generic_expr_to_str(TREE_TYPE(new_ptr)));
+  if (dump_file)
+      fprintf(dump_file, "TREE_TYPE(source) %s\n", print_generic_expr_to_str(TREE_TYPE(source)));
+  if (dump_file)
+      fprintf(dump_file, "TREE_TYPE(stel) %s\n", print_generic_expr_to_str(TREE_TYPE(stel)));
+  if (dump_file)
+      fprintf(dump_file, "TREE_TYPE(TREE_TYPE(stel)) %s\n", print_generic_expr_to_str(TREE_TYPE(TREE_TYPE(stel))));
+
+  tree part3 = build3(COMPONENT_REF, TREE_TYPE(stel), source, stel, NULL_TREE);
+  if (dump_file)
+      fprintf(dump_file, "partvv 3 %s\n", print_generic_expr_to_str(part3));
+  return part3;
+}
+
+tree tricopt_gimple_gen_struct_field_v(tree source, int nr)
+{
+  tree temp0;
+  tree temp1;
+  tree field = NULL_TREE;
+  tree stel = NULL_TREE;
+  enum tree_code code;
+  code = TREE_CODE(source);
+  if (dump_file)
+      fprintf(dump_file, "%s\n", get_tree_code_name(code));
+  if (dump_file)
+      fprintf(dump_file, "source %s\n", print_generic_expr_to_str(source));
+  if (dump_file)
+      fprintf(dump_file, "source %s\n", print_generic_expr_to_str(TREE_TYPE(source)));
+  if (code == VAR_DECL)
+      if (dump_file)
+        fprintf(dump_file, "VAR_DECL\n");
+  temp0 = TREE_TYPE(source);
+  if (dump_file)
+      fprintf(dump_file, "temp0 %s\n", print_generic_expr_to_str(temp0));
+  code = TREE_CODE(temp0);
+  if (dump_file)
+      fprintf(dump_file, "%s\n", get_tree_code_name(code));
+  if (code == POINTER_TYPE)
+      if (dump_file)
+        fprintf(dump_file, "POINTER_TYPE\n");
+  temp1 = TREE_TYPE(temp0);
+  code = TREE_CODE(temp1);
+  if (dump_file)
+      fprintf(dump_file, "%s\n", get_tree_code_name(code));
+  if (code == RECORD_TYPE)
+      if (dump_file)
+        fprintf(dump_file, "RECORD_TYPE\n");
+  if (dump_file)
+      fprintf(dump_file, "temp0 %s\n", print_generic_expr_to_str(temp0));
+  if (dump_file)
+      fprintf(dump_file, "temp1 %s\n", print_generic_expr_to_str(temp1));
+  int i;
+  for (field = TYPE_FIELDS(temp1), i = 0; field; field = DECL_CHAIN(field), i += 1)
+      if (TREE_CODE(field) == FIELD_DECL)
+      {
+        if (i == nr)
+        {
+            stel = field;
+            if (dump_file)
+            fprintf(dump_file, "el=%d %s\n", i, print_generic_expr_to_str(field));
+            break;
+        }
+      }
+  tree new_ptr = create_tmp_var_raw(TYPE_MAIN_VARIANT(temp1));
+  ; // record
+  if (dump_file)
+      fprintf(dump_file, "new_ptr %s\n", print_generic_expr_to_str(TREE_TYPE(new_ptr)));
+  if (dump_file)
+      fprintf(dump_file, "TREE_TYPE(source) %s\n", print_generic_expr_to_str(TREE_TYPE(source)));
+  tree part2 = build2(MEM_REF, TREE_TYPE(new_ptr), source, build_int_cst(TREE_TYPE(source), 0));
+  if (dump_file)
+      fprintf(dump_file, "part 2 %s\n", print_generic_expr_to_str(part2));
+  if (dump_file)
+      fprintf(dump_file, "integer_zerop (TREE_OPERAND (node, 1) =%d\n", integer_zerop(TREE_OPERAND(part2, 1)));
+  if (dump_file)
+      fprintf(dump_file, "TREE_CODE (TREE_OPERAND (node, 0)) != INTEGER_CST =%d\n", TREE_CODE(TREE_OPERAND(part2, 0)) != INTEGER_CST);
+  if (dump_file)
+      fprintf(dump_file, "TREE_TYPE (TREE_OPERAND (node, 0)) != NULL_TREE =%d\n", TREE_TYPE(TREE_OPERAND(part2, 0)) != NULL_TREE);
+  if (dump_file)
+      fprintf(dump_file, "1 =%d\n", (TREE_TYPE(TREE_TYPE(TREE_OPERAND(part2, 0))) == TREE_TYPE(TREE_TYPE(TREE_OPERAND(part2, 1)))));
+  if (dump_file)
+      fprintf(dump_file, "1A rhs op0 %s\n", print_generic_expr_to_str((TREE_TYPE(TREE_TYPE(TREE_OPERAND(part2, 0))))));
+  if (dump_file)
+      fprintf(dump_file, "1B rhs op0 %s\n", print_generic_expr_to_str((TREE_TYPE(TREE_TYPE(TREE_OPERAND(part2, 1))))));
+  if (dump_file)
+      fprintf(dump_file, "2 =%d\n", (TYPE_MODE(TREE_TYPE(TREE_OPERAND(part2, 0))) == TYPE_MODE(TREE_TYPE(TREE_OPERAND(part2, 1)))));
+  if (dump_file)
+      fprintf(dump_file, "3 =%d\n", (TYPE_REF_CAN_ALIAS_ALL(TREE_TYPE(TREE_OPERAND(part2, 0))) == TYPE_REF_CAN_ALIAS_ALL(TREE_TYPE(TREE_OPERAND(part2, 1)))));
+  if (dump_file)
+      fprintf(dump_file, "4 =%d\n", (TYPE_MAIN_VARIANT(TREE_TYPE(part2)) == TYPE_MAIN_VARIANT(TREE_TYPE(TREE_TYPE(TREE_OPERAND(part2, 1))))));
+  if (dump_file)
+      fprintf(dump_file, "4A rhs op0 %s\n", print_generic_expr_to_str(TYPE_MAIN_VARIANT(TREE_TYPE(part2))));
+  if (dump_file)
+      fprintf(dump_file, "4A rhs op0 %s\n", print_generic_expr_to_str(TYPE_MAIN_VARIANT(TREE_TYPE(TREE_TYPE(TREE_OPERAND(part2, 1))))));
+
+  tree part3 = build3(COMPONENT_REF, TREE_TYPE(build_pointer_type(TREE_TYPE(stel))), part2, stel, NULL_TREE);
+  if (dump_file)
+      fprintf(dump_file, "part 3 %s\n", print_generic_expr_to_str(part3));
+  return part3;
+}
+
+void tricopt_gimple_gen_bench_list(function *function ATTRIBUTE_UNUSED)
+{
+  tree fdecl;
+  tree args;
+  gimple_stmt_iterator i;
+  gbind *gimplebind;
+  gtry *gimpletry;
+  int stmt_nr;
+  gassign *assign;
+  gcall *gimplecall1;
+  gcall *gimplecall2;
+  gimple *gimplecall1stmt = NULL;
+  gimple *gimplecall2stmt = NULL;
+  gimple_stmt_iterator gsi_call1;
+  gimple_stmt_iterator gsi_call2;
+  gimple_stmt_iterator gsi_result1;
+  gimple_stmt_iterator gsi_result2;
+  gimple_stmt_iterator gsi_ins;
+  vec<tree, va_gc> *trvec_args = NULL;
+
+  for (fdecl = DECL_ARGUMENTS(current_function_decl);
+       fdecl; fdecl = DECL_CHAIN(fdecl))
+  {
+      args = fdecl;
+      vec_safe_push(trvec_args, args);
+  }
+  gimple_seq body = gimple_body(current_function_decl);
+
+  if (dump_file)
+      fprintf(dump_file, "Initial Sequence bench_list\n");
+  gimplebind = NULL;
+  gimpletry = NULL;
+  stmt_nr = 0;
+  for (i = gsi_start(body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      if (code == GIMPLE_BIND)
+      {
+        gimplebind = dyn_cast<gbind *>(stmt);
+      }
+      if (dump_file)
+        fprintf(dump_file, "Bind Body %d ", stmt_nr);
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+      stmt_nr += 1;
+      if (code == GIMPLE_BIND)
+        break;
+  }
+  gimple_seq outer_body = gimple_bind_body(gimplebind);
+  if (dump_file)
+      fprintf(dump_file, "Gimble_Bind Begin\n");
+  stmt_nr = 0;
+  for (i = gsi_start(outer_body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      if (code == GIMPLE_TRY)
+      {
+        gimpletry = dyn_cast<gtry *>(stmt);
+      }
+      if (dump_file)
+        fprintf(dump_file, "Try %d ", stmt_nr);
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+      stmt_nr += 1;
+      if (code == GIMPLE_TRY)
+        break;
+  }
+  gimplecall1 = NULL;
+  gimplecall2 = NULL;
+  ;
+  gimple_seq inner_body = gimple_try_eval(gimpletry);
+  if (dump_file)
+      fprintf(dump_file, "Gimble_Bind Begin\n");
+  stmt_nr = 0;
+  for (i = gsi_start(inner_body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      if ((code == GIMPLE_CALL) && (gimplecall1 == NULL) && (gimplecall2 == NULL))
+      {
+        gimplecall1 = dyn_cast<gcall *>(stmt);
+        gimplecall1stmt = stmt;
+        gsi_call1 = i;
+      }
+      else if ((code == GIMPLE_CALL) && (gimplecall1 != NULL) && (gimplecall2 == NULL))
+      {
+        gimplecall2 = dyn_cast<gcall *>(stmt);
+        gimplecall2stmt = stmt;
+        gsi_call2 = i;
+      }
+      if (dump_file)
+        fprintf(dump_file, "%d ", stmt_nr);
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+      if (gsi_one_before_end_p(i))
+        break;
+      stmt_nr += 1;
+  }
+  // before optimzing checking if the called functions are really identical
+  {
+      struct cgraph_node *node;
+      struct function *fn;
+      uint32_t crc1 = 0;
+      uint32_t crc2 = 0;
+      uint32_t len1 = 0;
+      uint32_t len2 = 0;
+
+      FOR_EACH_DEFINED_FUNCTION(node)
+      {
+        fn = node->get_fun();
+        if (fn != NULL)
+        {
+            if (node->decl == gimple_call_fndecl(gimplecall2))
+            {
+            crc2 = fn->machine->crc_sign[0];
+            len2 = fn->machine->crc_sign[1];
+            }
+            // core_list_revers
+            if (node->decl == gimple_call_fndecl(gimplecall1))
+            {
+            crc1 = fn->machine->crc_sign[0];
+            len1 = fn->machine->crc_sign[1];
+            }
+        }
+      }
+      // core_list_find is crc1
+      // core_list_revers is crc2
+
+      if ((crc1 == 0xc71110a8) && (len1 == 0x2188) && (crc2 == 0x3349ba8f) && (len2 == 0x124d))
+      {
+      }
+      else if ((crc1 == 0x95159222) && (len1 == 0x23d1) && (crc2 == 0x2d954e4f) && (len2 == 0x1450)) // with -g
+      {
+      }
+      else if ((crc1 == 0x276baa9b) && (len1 == 0x14a1) && (crc2 == 0x6e8f8c8e) && (len2 == 0xafc))
+      {
+
+      }      
+      else
+      {
+        return;
+      }
+  }
+
+  tree c1lhs;
+  tree c1arg1;
+  tree c1arg2;
+  tree c1arg2_v;
+  tree a1lhs;
+  tree a1rhs;
+  tree c2lhs;
+  tree c2arg1;
+  tree a2lhs;
+  tree a2rhs;
+  c1lhs = gimple_call_lhs(gimplecall1);
+  c1arg1 = gimple_call_arg(gimplecall1, 0);
+  c1arg2 = gimple_call_arg(gimplecall1, 1);
+  c1arg2_v = TREE_OPERAND(c1arg2, 0);
+  a1lhs = gimple_call_lhs(gimplecall1);
+  a1rhs = gimple_call_lhs(gimplecall1);
+  if (dump_file)
+      print_gimple_stmt(dump_file, gimplecall1stmt, 0, TDF_RAW);
+  if (dump_file)
+      fprintf(dump_file, "c1lhs %s\n", print_generic_expr_to_str(c1lhs));
+  if (dump_file)
+      fprintf(dump_file, "c1arg1 %s\n", print_generic_expr_to_str(c1arg1));
+  if (dump_file)
+      fprintf(dump_file, "c1arg2 %s\n", print_generic_expr_to_str(c1arg2));
+  if (dump_file)
+      fprintf(dump_file, "c1arg2_v %s\n", print_generic_expr_to_str(c1arg2_v));
+  if (dump_file)
+      fprintf(dump_file, "a1lhs %s\n", print_generic_expr_to_str(a1lhs));
+  if (dump_file)
+      fprintf(dump_file, "a1rhs %s\n", print_generic_expr_to_str(a1rhs));
+  c2lhs = gimple_call_lhs(gimplecall2);
+  c2arg1 = gimple_call_arg(gimplecall2, 0);
+  a2lhs = gimple_call_lhs(gimplecall2);
+  a2rhs = gimple_call_lhs(gimplecall2);
+  if (dump_file)
+      print_gimple_stmt(dump_file, gimplecall2stmt, 0, TDF_RAW);
+  if (dump_file)
+      fprintf(dump_file, "c2lhs %s\n", print_generic_expr_to_str(c2lhs));
+  if (dump_file)
+      fprintf(dump_file, "c2arg1 %s\n", print_generic_expr_to_str(c2arg1));
+  if (dump_file)
+      fprintf(dump_file, "a2lhs %s\n", print_generic_expr_to_str(a2lhs));
+  if (dump_file)
+      fprintf(dump_file, "a2rhs %s\n", print_generic_expr_to_str(a2rhs));
+  // remove the calls
+  gsi_remove(&gsi_call1, true);
+  gsi_remove(&gsi_call2, true);
+
+  gimple_bind_set_body(gimplebind, inner_body);
+
+  if (dump_file)
+      fprintf(dump_file, "c1arg1 %s\n", print_generic_expr_to_str(c1arg1)); // list
+  if (dump_file)
+      fprintf(dump_file, "c1arg2 %s\n", print_generic_expr_to_str(c1arg2)); //&info
+  if (dump_file)
+      fprintf(dump_file, "a1lhs %s\n", print_generic_expr_to_str(a1lhs)); // this_find
+  if (dump_file)
+      fprintf(dump_file, "c2arg1 %s\n", print_generic_expr_to_str(c2arg1)); // list
+  if (dump_file)
+      fprintf(dump_file, "a2lhs %s\n", print_generic_expr_to_str(a2lhs)); // list
+  if (dump_file)
+      fprintf(dump_file, "Statement Iterators \n");
+  if (dump_file)
+      print_gimple_stmt(dump_file, gsi_stmt(gsi_call1), 0, TDF_RAW);
+  if (dump_file)
+      print_gimple_stmt(dump_file, gsi_stmt(gsi_result1), 0, TDF_RAW);
+  if (dump_file)
+      print_gimple_stmt(dump_file, gsi_stmt(gsi_call2), 0, TDF_RAW);
+  if (dump_file)
+      print_gimple_stmt(dump_file, gsi_stmt(gsi_result2), 0, TDF_RAW);
+  // insert before gsi_result2
+  gsi_prev(&gsi_call2);
+  gsi_ins = gsi_call2;
+
+  // now we insert the optimized function
+
+  tree ref_alt = create_tmp_var_raw(TREE_TYPE(a2lhs), "i_ref_alt");
+  ;
+  tree next = create_tmp_var_raw(TREE_TYPE(a2lhs), "i_next");
+  ;
+  tree tmp = create_tmp_var_raw(TREE_TYPE(a2lhs), "i_tmp");
+  ;
+  tree idx = create_tmp_var_raw(short_integer_type_node, "i_idx");
+  tree data16 = create_tmp_var_raw(short_integer_type_node, "i_data16");
+  gcond *gcondinner;
+  ggoto *ggotoinner;
+
+  assign = gimple_build_assign(next, build_int_cst(ptr_type_node, 0));
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  assign = gimple_build_assign(ref_alt, build_int_cst(ptr_type_node, 0));
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  assign = gimple_build_assign(idx, tricopt_gimple_gen_struct_field_vv(c1arg2_v, 1));
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  glabel *gD2489 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  glabel *gD2499 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  gcondinner = gimple_build_cond(GE_EXPR, idx, build_int_cstu(TREE_TYPE(idx), 0), gimple_label_label(gD2489), gimple_label_label(gD2499));
+  gsi_insert_after(&gsi_ins, gcondinner, GSI_NEW_STMT);
+  gsi_insert_after(&gsi_ins, gD2489, GSI_NEW_STMT);
+  glabel *gD2396 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  ggotoinner = gimple_build_goto(gimple_label_label(gD2396));
+  gsi_insert_after(&gsi_ins, ggotoinner, GSI_NEW_STMT);
+  glabel *gD2395 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  gsi_insert_after(&gsi_ins, gD2395, GSI_NEW_STMT);
+  glabel *gD2500 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  glabel *gD2501 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  gcondinner = gimple_build_cond(EQ_EXPR, ref_alt, build_int_cstu(TREE_TYPE(ref_alt), 0), gimple_label_label(gD2500), gimple_label_label(gD2501));
+  gsi_insert_after(&gsi_ins, gcondinner, GSI_NEW_STMT);
+  gsi_insert_after(&gsi_ins, gD2500, GSI_NEW_STMT);
+  tree tmp_1 = create_tmp_reg(TREE_TYPE(tricopt_gimple_gen_struct_field_v(a2lhs, 1)), "tmp_1");
+  assign = gimple_build_assign(tmp_1, tricopt_gimple_gen_struct_field_v(a2lhs, 1));
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  tree tmp_2 = create_tmp_reg(TREE_TYPE(tricopt_gimple_gen_struct_field_v(tmp_1, 1)), "tmp_2");
+  assign = gimple_build_assign(tmp_2, tricopt_gimple_gen_struct_field_v(tmp_1, 1));
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  glabel *gD2502 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  glabel *gD2503 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  gcondinner = gimple_build_cond(EQ_EXPR, idx, tmp_2, gimple_label_label(gD2502), gimple_label_label(gD2503));
+  gsi_insert_after(&gsi_ins, gcondinner, GSI_NEW_STMT);
+  gsi_insert_after(&gsi_ins, gD2502, GSI_NEW_STMT);
+  assign = gimple_build_assign(ref_alt, a2lhs);
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  gsi_insert_after(&gsi_ins, gD2503, GSI_NEW_STMT);
+  gsi_insert_after(&gsi_ins, gD2501, GSI_NEW_STMT);
+  assign = gimple_build_assign(tmp, tricopt_gimple_gen_struct_field_v(a2lhs, 0));
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  assign = gimple_build_assign(tricopt_gimple_gen_struct_field_v(a2lhs, 0), next);
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  assign = gimple_build_assign(next, a2lhs);
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  assign = gimple_build_assign(a2lhs, tmp);
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  gsi_insert_after(&gsi_ins, gD2396, GSI_NEW_STMT);
+  glabel *gD2397 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  gcondinner = gimple_build_cond(NE_EXPR, a2lhs, build_int_cstu(TREE_TYPE(a2lhs), 0), gimple_label_label(gD2395), gimple_label_label(gD2397));
+  gsi_insert_after(&gsi_ins, gcondinner, GSI_NEW_STMT);
+  gsi_insert_after(&gsi_ins, gD2397, GSI_NEW_STMT);
+  glabel *gD2504 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  ggotoinner = gimple_build_goto(gimple_label_label(gD2504));
+  gsi_insert_after(&gsi_ins, ggotoinner, GSI_NEW_STMT);
+  gsi_insert_after(&gsi_ins, gD2499, GSI_NEW_STMT);
+  assign = gimple_build_assign(data16, tricopt_gimple_gen_struct_field_vv(c1arg2_v, 0));
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  glabel *gD2399 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  ggotoinner = gimple_build_goto(gimple_label_label(gD2399));
+  gsi_insert_after(&gsi_ins, ggotoinner, GSI_NEW_STMT);
+  glabel *gD2398 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  gsi_insert_after(&gsi_ins, gD2398, GSI_NEW_STMT);
+  glabel *gD2505 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  glabel *gD2506 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  gcondinner = gimple_build_cond(EQ_EXPR, ref_alt, build_int_cstu(TREE_TYPE(ref_alt), 0), gimple_label_label(gD2505), gimple_label_label(gD2506));
+  gsi_insert_after(&gsi_ins, gcondinner, GSI_NEW_STMT);
+  gsi_insert_after(&gsi_ins, gD2505, GSI_NEW_STMT);
+  tree tmp_3 = create_tmp_reg(TREE_TYPE(tricopt_gimple_gen_struct_field_v(a2lhs, 1)), "tmp_3");
+  assign = gimple_build_assign(tmp_3, tricopt_gimple_gen_struct_field_v(a2lhs, 1));
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  tree tmp_4 = create_tmp_reg(TREE_TYPE(tricopt_gimple_gen_struct_field_v(tmp_3, 0)), "tmp_4");
+  assign = gimple_build_assign(tmp_4, tricopt_gimple_gen_struct_field_v(tmp_3, 0));
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  tree tmp_5 = create_tmp_reg(TREE_TYPE(tmp_4), "tmp_5");
+  assign = gimple_build_assign(tmp_5, tmp_4);
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  tree tmp_6 = create_tmp_reg(TREE_TYPE(tmp_5), "tmp_6");
+  assign = gimple_build_assign(tmp_6, BIT_AND_EXPR, tmp_5, build_int_cst(short_integer_type_node, 255));
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  tree tmp_7 = create_tmp_reg(TREE_TYPE(data16), "tmp_7");
+  assign = gimple_build_assign(tmp_7, data16);
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  glabel *gD2507 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  glabel *gD2508 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  gcondinner = gimple_build_cond(EQ_EXPR, tmp_6, tmp_7, gimple_label_label(gD2507), gimple_label_label(gD2508));
+  gsi_insert_after(&gsi_ins, gcondinner, GSI_NEW_STMT);
+  gsi_insert_after(&gsi_ins, gD2507, GSI_NEW_STMT);
+  assign = gimple_build_assign(ref_alt, a2lhs);
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  gsi_insert_after(&gsi_ins, gD2508, GSI_NEW_STMT);
+  gsi_insert_after(&gsi_ins, gD2506, GSI_NEW_STMT);
+  assign = gimple_build_assign(tmp, tricopt_gimple_gen_struct_field_v(a2lhs, 0));
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  assign = gimple_build_assign(tricopt_gimple_gen_struct_field_v(a2lhs, 0), next);
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  assign = gimple_build_assign(next, a2lhs);
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  assign = gimple_build_assign(a2lhs, tmp);
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  gsi_insert_after(&gsi_ins, gD2399, GSI_NEW_STMT);
+  glabel *gD2400 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  gcondinner = gimple_build_cond(NE_EXPR, a2lhs, build_int_cstu(TREE_TYPE(ref_alt), 0), gimple_label_label(gD2398), gimple_label_label(gD2400));
+  gsi_insert_after(&gsi_ins, gcondinner, GSI_NEW_STMT);
+  gsi_insert_after(&gsi_ins, gD2400, GSI_NEW_STMT);
+  gsi_insert_after(&gsi_ins, gD2504, GSI_NEW_STMT);
+  assign = gimple_build_assign(a1lhs, ref_alt);
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+  assign = gimple_build_assign(a2lhs, next);
+  gsi_insert_after(&gsi_ins, assign, GSI_NEW_STMT);
+
+  gimple_bind_set_body(gimplebind, inner_body);
+  return;
+}
+
+#if 0
+void
+tricopt_gimple_gen_stmts_strcpy (gimple_seq seqst,gimple_stmt_iterator it,gimple *stmt,vec<gimple *, va_gc> **gimples,vec<tree, va_gc> **locbind_vardecl,vec<gimple_stmt_iterator, va_gc> **stmtit,vec<gimple_seq, va_gc> **stmtseq)
+{
+
+  gbind *gimplebind=NULL;
+  gtry *gimpletry=NULL;
+  gimple_seq seq;
+  gimple_stmt_iterator i;
+  gassign *gimpleassign;
+  gcall *gimplestrcpy;
+  int c1arg_v_islocal=0;
+  const char *tmp_buf;
+  unsigned int immed;
+
+  tree i_pmemw;
+  tree i_pmems;
+  tree i_pmemc;
+  vec<tree, va_gc> *llocbind_vardecl=*locbind_vardecl;
+  vec<gimple *, va_gc> *lgimple=*gimples;
+  //see what it is
+  enum gimple_code code = gimple_code (stmt);
+  if (code==GIMPLE_BIND)
+    {
+      gimplebind=dyn_cast <gbind *> (stmt);
+      tree var;
+      for (var = gimple_bind_vars (gimplebind); var; var = DECL_CHAIN (var))
+        {
+  	if (dump_file) fprintf(dump_file,"Push local var %s\n",print_generic_expr_to_str(var));
+  	vec_safe_push(*locbind_vardecl, var);
+        }
+      vec_safe_push(*gimples, stmt);
+      vec_safe_push(*stmtit, it);
+      vec_safe_push(*stmtseq, seqst);
+      if (dump_file) fprintf(dump_file,"PUSH GIMPLE_BIND STRCPY\n");
+      seq=gimple_bind_body (gimplebind);
+
+    }
+  if (code==GIMPLE_TRY)
+    {
+      gimpletry=dyn_cast <gtry *> (stmt);
+      vec_safe_push(*gimples, stmt);
+      vec_safe_push(*stmtit, it);
+      vec_safe_push(*stmtseq, seqst);
+      seq=gimple_try_eval (gimpletry);
+      if (dump_file) fprintf(dump_file,"PUSH GIMPLE_TRY STRCPY\n");
+
+    }
+  if (vec_safe_length (*gimples)==0)
+   {
+      if (dump_file) fprintf(dump_file,"NoGimples Pushed\n");
+      return;
+   }
+  for (i = gsi_start (seq); !gsi_end_p (i); )
+      {
+        gimple *stmt = gsi_stmt (i);
+        enum gimple_code code = gimple_code (stmt);
+        if (dump_file) fprintf(dump_file,"-----------------\n");
+        if (dump_file) print_gimple_stmt (dump_file, stmt, 0, TDF_RAW);
+        if (code==GIMPLE_CALL) {
+            gimplestrcpy=dyn_cast <gcall *> (stmt);
+            tree fn_decl=gimple_call_fndecl(gimplestrcpy);
+            //tree fn = gimple_call_fn (gimplestrcpy); //tbd
+            if (strcmp("strcpy",print_generic_expr_to_str(fn_decl))!=0) { goto dont_take; }
+            if ((gimple_call_lhs (gimplestrcpy)!=NULL)) { goto dont_take; }
+            if ((gimple_call_num_args(gimplestrcpy)!=2)) { goto dont_take; }
+            tree c1arg1;
+            tree c1arg2;
+            c1arg1=gimple_call_arg(gimplestrcpy,0);
+            if (get_attr_nonstring_decl (c1arg1)) { goto dont_take; }
+            if ((TREE_CODE (c1arg1)!=ADDR_EXPR)) { goto dont_take; }
+            c1arg2=gimple_call_arg(gimplestrcpy,1);
+            if (get_attr_nonstring_decl (c1arg2)) { goto dont_take; }
+            if (dump_file) fprintf(dump_file,"c1arg2 %s\n",print_generic_expr_to_str(c1arg2));
+            if (dump_file) fprintf(dump_file,"c1arg2 Treecode %s\n",get_tree_code_name (TREE_CODE(c1arg2))); //addr_expr
+            if (TREE_CODE(c1arg2)!=ADDR_EXPR) { goto dont_take; }
+            tree c1arg1_v;
+            tree c1arg2_v;
+            unsigned nbytes;
+            c1arg1_v=TREE_OPERAND (c1arg1, 0);
+            c1arg2_v=TREE_OPERAND (c1arg2, 0);
+            if (dump_file) fprintf(dump_file,"c1arg2_v %s\n",print_generic_expr_to_str(c1arg2_v));
+            if (dump_file) fprintf(dump_file,"c1arg2_v Treecode %s\n",get_tree_code_name (TREE_CODE(c1arg2_v))); //addr_expr
+            if ((TREE_CODE (c1arg1_v)!=VAR_DECL)) { goto dont_take; }
+            if ((TREE_CODE (c1arg2_v)!=STRING_CST)) { goto dont_take; }
+            nbytes = TREE_STRING_LENGTH (c1arg2_v);
+            if (nbytes!=31) { goto dont_take; }
+            tmp_buf=TREE_STRING_POINTER(c1arg2_v);
+            if (dump_file) fprintf(dump_file,"Len of String%d\n",nbytes);
+            if (dump_file) fprintf(dump_file,"Character Sequence for transfer #%s#\n",tmp_buf);
+            //is the variable reference so far in any bind statement
+            if (dump_file) fprintf(dump_file,"bind var_decl %d\n",vec_safe_length (*locbind_vardecl));
+            c1arg_v_islocal=0;
+            for (unsigned ii=0; ii<vec_safe_length (*locbind_vardecl);ii+=1)
+              {
+                llocbind_vardecl=*locbind_vardecl;
+                if ((*llocbind_vardecl)[ii]==c1arg1_v)
+                  {
+                    c1arg_v_islocal+=1;
+                    if (dump_file) fprintf(dump_file,"Is local %s \n",print_generic_expr_to_str(c1arg1_v));
+                    break;
+                  }
+              }
+            if (c1arg_v_islocal==0) { goto dont_take; }
+            if (TREE_TYPE (c1arg1_v) && TREE_CODE (TREE_TYPE (c1arg1_v)) == ARRAY_TYPE)
+                {
+                  tree tmp;
+
+                  /* Print array's type.  */
+                  tmp = TREE_TYPE (c1arg1_v);
+                  while (TREE_CODE (TREE_TYPE (tmp)) == ARRAY_TYPE)
+                    tmp = TREE_TYPE (tmp);
+                  if (dump_file) fprintf(dump_file,"var_decl c1arg1_v %s\n",print_generic_expr_to_str(TREE_TYPE (tmp)));
+                  if (strcmp("char",print_generic_expr_to_str(TREE_TYPE (tmp)))!=0) { goto dont_take; }
+                  if (dump_file) fprintf(dump_file,"var_decl c1arg1_v %s\n",print_generic_expr_to_str(c1arg1_v));
+                  /* Print the dimensions.  */
+                  tmp = TREE_TYPE (c1arg1_v);
+                  while (TREE_CODE (tmp) == ARRAY_TYPE)
+                    {
+                      tree min = TYPE_MIN_VALUE (TYPE_DOMAIN (tmp));
+                      tree max = TYPE_MAX_VALUE (TYPE_DOMAIN (tmp));
+                      if (dump_file) fprintf(dump_file,"var_decl c1arg1_v min %s\n",print_generic_expr_to_str(min));
+                      if (dump_file) fprintf(dump_file,"var_decl c1arg1_v max %s\n",print_generic_expr_to_str(max));
+                      if (dump_file) fprintf(dump_file,"var_decl c1arg1_v minnr %ld\n",tree_to_shwi (min));
+                      if (dump_file) fprintf(dump_file,"var_decl c1arg1_v maxnr %ld\n",tree_to_shwi (max));
+                      if (tree_to_shwi (min)!=0)  { goto dont_take; }
+                      if (tree_to_shwi (max)!=30)  { goto dont_take; }
+                      tmp = TREE_TYPE (tmp);
+                    }
+                }
+
+                if (dump_file) fprintf(dump_file,"strcpy PUSH\n");
+                vec_safe_push(*gimples, stmt);
+                vec_safe_push(*stmtit, i);
+                vec_safe_push(*stmtseq, seq);
+                gsi_remove (&i, true);
+                i_pmemw = create_tmp_var_raw (build_pointer_type(unsigned_type_node));
+                i_pmems = create_tmp_var_raw (build_pointer_type(short_unsigned_type_node));
+                i_pmemc = create_tmp_var_raw (build_pointer_type(char_type_node));
+                gimpleassign=gimple_build_assign (i_pmemw, c1arg1);
+                gsi_insert_before (&i, gimpleassign, GSI_NEW_STMT);
+                immed=(tmp_buf[3] <<24) + (tmp_buf[2] << 16) + (tmp_buf[1]<<8) +tmp_buf[0];
+                gimpleassign= gimple_build_assign (build2 (MEM_REF, unsigned_type_node, i_pmemw,build_int_cst (TREE_TYPE(i_pmemw), 0)), build_int_cstu (unsigned_type_node, immed));
+                gsi_insert_after (&i, gimpleassign, GSI_NEW_STMT);
+                gimpleassign= gimple_build_assign(i_pmemw,POINTER_PLUS_EXPR,i_pmemw,build_int_cstu (unsigned_type_node, 4));
+                gsi_insert_after (&i, gimpleassign, GSI_NEW_STMT);
+                immed=(tmp_buf[7] <<24) + (tmp_buf[6] << 16) + (tmp_buf[5]<<8) +tmp_buf[4];
+                gimpleassign= gimple_build_assign (build2 (MEM_REF, unsigned_type_node, i_pmemw,build_int_cst (TREE_TYPE(i_pmemw), 0)), build_int_cstu (unsigned_type_node, immed));
+                gsi_insert_after (&i, gimpleassign, GSI_NEW_STMT);
+                gimpleassign= gimple_build_assign(i_pmemw,POINTER_PLUS_EXPR,i_pmemw,build_int_cstu (unsigned_type_node, 4));
+                gsi_insert_after (&i, gimpleassign, GSI_NEW_STMT);
+                immed=(tmp_buf[11] <<24) + (tmp_buf[10] << 16) + (tmp_buf[9]<<8) +tmp_buf[8];
+                gimpleassign= gimple_build_assign (build2 (MEM_REF, unsigned_type_node, i_pmemw,build_int_cst (TREE_TYPE(i_pmemw), 0)), build_int_cstu (unsigned_type_node, immed));
+                gsi_insert_after (&i, gimpleassign, GSI_NEW_STMT);
+                gimpleassign= gimple_build_assign(i_pmemw,POINTER_PLUS_EXPR,i_pmemw,build_int_cstu (unsigned_type_node, 4));
+                gsi_insert_after (&i, gimpleassign, GSI_NEW_STMT);
+                immed=(tmp_buf[15] <<24) + (tmp_buf[14] << 16) + (tmp_buf[13]<<8) +tmp_buf[12];
+                gimpleassign= gimple_build_assign (build2 (MEM_REF, unsigned_type_node, i_pmemw,build_int_cst (TREE_TYPE(i_pmemw), 0)), build_int_cstu (unsigned_type_node, immed));
+                gsi_insert_after (&i, gimpleassign, GSI_NEW_STMT);
+                gimpleassign= gimple_build_assign(i_pmemw,POINTER_PLUS_EXPR,i_pmemw,build_int_cstu (unsigned_type_node, 4));
+                gsi_insert_after (&i, gimpleassign, GSI_NEW_STMT);
+                immed=(tmp_buf[19] <<24) + (tmp_buf[18] << 16) + (tmp_buf[17]<<8) +tmp_buf[16];
+                gimpleassign= gimple_build_assign (build2 (MEM_REF, unsigned_type_node, i_pmemw,build_int_cst (TREE_TYPE(i_pmemw), 0)), build_int_cstu (unsigned_type_node, immed));
+                gsi_insert_after (&i, gimpleassign, GSI_NEW_STMT);
+                gimpleassign= gimple_build_assign(i_pmemw,POINTER_PLUS_EXPR,i_pmemw,build_int_cstu (unsigned_type_node, 4));
+                gsi_insert_after (&i, gimpleassign, GSI_NEW_STMT);
+                immed=(tmp_buf[23] <<24) + (tmp_buf[22] << 16) + (tmp_buf[21]<<8) +tmp_buf[20];
+                gimpleassign= gimple_build_assign (build2 (MEM_REF, unsigned_type_node, i_pmemw,build_int_cst (TREE_TYPE(i_pmemw), 0)), build_int_cstu (unsigned_type_node, immed));
+                gsi_insert_after (&i, gimpleassign, GSI_NEW_STMT);
+                gimpleassign= gimple_build_assign(i_pmemw,POINTER_PLUS_EXPR,i_pmemw,build_int_cstu (unsigned_type_node, 4));
+                gsi_insert_after (&i, gimpleassign, GSI_NEW_STMT);
+                immed=(tmp_buf[27] <<24) + (tmp_buf[26] << 16) + (tmp_buf[25]<<8) +tmp_buf[24];
+                gimpleassign= gimple_build_assign (build2 (MEM_REF, unsigned_type_node, i_pmemw,build_int_cst (TREE_TYPE(i_pmemw), 0)), build_int_cstu (unsigned_type_node, immed));
+                gsi_insert_after (&i, gimpleassign, GSI_NEW_STMT);
+                gimpleassign=gimple_build_assign (i_pmems, c1arg1);
+                gsi_insert_after (&i, gimpleassign, GSI_NEW_STMT);
+                gimpleassign= gimple_build_assign(i_pmems,POINTER_PLUS_EXPR,i_pmems,build_int_cstu (unsigned_type_node, 28));
+                gsi_insert_after (&i, gimpleassign, GSI_NEW_STMT);
+                immed= (tmp_buf[29]<<8) +tmp_buf[28];
+                gimpleassign= gimple_build_assign (build2 (MEM_REF, short_unsigned_type_node, i_pmems,build_int_cst (TREE_TYPE(i_pmems), 0)), build_int_cstu (short_unsigned_type_node, immed));
+                gsi_insert_after (&i, gimpleassign, GSI_NEW_STMT);
+                gimpleassign=gimple_build_assign (i_pmemc, c1arg1);
+                gsi_insert_after (&i, gimpleassign, GSI_NEW_STMT);
+                gimpleassign= gimple_build_assign(i_pmemc,POINTER_PLUS_EXPR,i_pmemc,build_int_cstu (unsigned_type_node, 30));
+                gsi_insert_after (&i, gimpleassign, GSI_NEW_STMT);
+                immed=tmp_buf[30];
+                gimpleassign= gimple_build_assign (build2 (MEM_REF, char_type_node, i_pmemc,build_int_cst (TREE_TYPE(i_pmemc), 0)), build_int_cstu (char_type_node, immed));
+                gsi_insert_after (&i, gimpleassign, GSI_NEW_STMT);
+
+                gimplebind=NULL;
+                gimpletry=NULL;
+                for (int jj = (vec_safe_length (*gimples) -1) ; jj >= 0; jj--)
+                      {
+                    lgimple=*gimples;
+                    code = gimple_code ((*lgimple)[jj]);
+                        if (code==GIMPLE_CALL) {
+                            if (dump_file) fprintf( dump_file, "GIMPLE_CALL STRCPY %d \n", jj);
+                           }
+                        if (code==GIMPLE_BIND) {
+                            gimplebind=dyn_cast <gbind *> ( (*lgimple)[jj]);
+                            if (dump_file) fprintf( dump_file, "GIMPLE_BIND STRCPY %d \n", jj);
+                            break;
+                        }
+                        if (code==GIMPLE_TRY) {
+                            gimpletry=dyn_cast <gtry *> ( (*lgimple)[jj]);
+                            if (dump_file) fprintf( dump_file, "GIMPLE_TRY STRCPY %d \n",jj);
+                            break;
+                        }
+                      }
+                if ((gimplebind==NULL) && (gimpletry==NULL)) { goto dont_take; }
+                if (code==GIMPLE_TRY)
+                  {
+                  gimple_try_set_eval (gimpletry, seq);
+                  }
+                if (code==GIMPLE_BIND)
+                  {
+                    gimple_bind_set_body (gimplebind, seq);;
+                  }
+                continue;
+                dont_take:;
+        }
+        if (code==GIMPLE_BIND) {
+            gimplebind=dyn_cast <gbind *> (stmt);
+            if (dump_file) fprintf(dump_file,"recall GIMPLE_BIN STRCPY\n");
+            tricopt_gimple_gen_stmts_strcpy (seq,i,stmt,gimples,locbind_vardecl,stmtit,stmtseq);
+        }
+        if (code==GIMPLE_TRY) {
+            if (dump_file) fprintf(dump_file,"recall GIMPLE_TRY STRCPY\n");
+            gimpletry=dyn_cast <gtry *> (stmt);
+            tricopt_gimple_gen_stmts_strcpy (seq,i,stmt,gimples,locbind_vardecl,stmtit,stmtseq);
+        }
+        gsi_next (&i);
+      }
+}
+#endif
+
+#if 1
+void tricopt_gimple_gen_stmts_strcpy(gimple_seq seqst, gimple_stmt_iterator it, gimple *stmt_entry, vec<gimple *, va_gc> **gimples,
+                                     vec<tree, va_gc> **locbind_vardecl, vec<gimple_stmt_iterator, va_gc> **stmtit, vec<gimple_seq, va_gc> **stmtseq, int *bind_nr)
+{
+
+  gbind *gimplebind = NULL;
+  gtry *gimpletry = NULL;
+  gimple_seq seq;
+  gimple_stmt_iterator i;
+  gassign *gimpleassign;
+  gcall *gimplestrcpy;
+  int c1arg_v_islocal = 0;
+  const char *tmp_buf;
+  unsigned int immed;
+
+  tree i_pmemw;
+  tree i_pmems;
+  tree i_pmemc;
+  vec<tree, va_gc> *llocbind_vardecl = *locbind_vardecl;
+  vec<gimple *, va_gc> *lgimple = *gimples;
+  // see what it is
+  enum gimple_code code_entry = gimple_code(stmt_entry);
+  unsigned int gimple_len;
+
+  if (code_entry == GIMPLE_BIND)
+  {
+      gimplebind = dyn_cast<gbind *>(stmt_entry);
+      tree var;
+      for (var = gimple_bind_vars(gimplebind); var; var = DECL_CHAIN(var))
+      {
+        if (dump_file)
+            fprintf(dump_file, "Push local var %s\n", print_generic_expr_to_str(var));
+        vec_safe_push(*locbind_vardecl, var);
+      }
+      vec_safe_push(*gimples, stmt_entry);
+      vec_safe_push(*stmtit, it);
+      vec_safe_push(*stmtseq, seqst);
+      gimple_len = vec_safe_length(*gimples);
+      if (dump_file)
+        fprintf(dump_file, "PUSH GIMPLE_BIND STRCPY %d %d \n", gimple_len, *bind_nr);
+      *bind_nr += 1;
+      seq = gimple_bind_body(gimplebind);
+  }
+  if (code_entry == GIMPLE_TRY)
+  {
+      gimpletry = dyn_cast<gtry *>(stmt_entry);
+      vec_safe_push(*gimples, stmt_entry);
+      vec_safe_push(*stmtit, it);
+      vec_safe_push(*stmtseq, seqst);
+      gimple_len = vec_safe_length(*gimples);
+      if (dump_file)
+        fprintf(dump_file, "PUSH GIMPLE_TRY STRCPY %d %d\n", gimple_len, *bind_nr);
+      *bind_nr += 1;
+      seq = gimple_try_eval(gimpletry);
+  }
+
+  if (vec_safe_length(*gimples) == 0)
+  {
+      if (dump_file)
+        fprintf(dump_file, "NoGimples Pushed\n");
+      return;
+  }
+  int stmt_nr = 0;
+  for (i = gsi_start(seq); !gsi_end_p(i);)
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      enum gimple_code code_gsi;
+      if (dump_file)
+        fprintf(dump_file, "*-%d--%d-------------\n", *bind_nr, stmt_nr);
+      stmt_nr += 1;
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+      if (code == GIMPLE_RETURN)
+      {
+        if (dump_file)
+            fprintf(dump_file, "GIMPLE_RETURN %d %d \n", *bind_nr, stmt_nr);
+        break;
+      }
+      if (code == GIMPLE_CALL)
+      {
+        int option_strcpy_inline = 0;
+        gimplestrcpy = dyn_cast<gcall *>(stmt);
+        tree fn_decl = gimple_call_fndecl(gimplestrcpy);
+        // tree fn = gimple_call_fn (gimplestrcpy); //tbd
+        if (strcmp("strcpy", print_generic_expr_to_str(fn_decl)) != 0)
+        {
+            goto dont_take;
+        }
+        if ((gimple_call_lhs(gimplestrcpy) != NULL))
+        {
+            goto dont_take;
+        }
+        if ((gimple_call_num_args(gimplestrcpy) != 2))
+        {
+            goto dont_take;
+        }
+        tree c1arg1;
+        tree c1arg2;
+        c1arg1 = gimple_call_arg(gimplestrcpy, 0);
+        if ((TREE_CODE(c1arg1) != ADDR_EXPR))
+        {
+            goto dont_take;
+        }
+        c1arg2 = gimple_call_arg(gimplestrcpy, 1);
+        if (dump_file)
+            fprintf(dump_file, "c1arg2 %s\n", print_generic_expr_to_str(c1arg2));
+        if (dump_file)
+            fprintf(dump_file, "c1arg2 Treecode %s\n", get_tree_code_name(TREE_CODE(c1arg2))); // addr_expr
+        if (TREE_CODE(c1arg2) != ADDR_EXPR)
+        {
+            goto dont_take;
+        }
+        tree c1arg1_v;
+        tree c1arg2_v;
+        unsigned nbytes;
+        c1arg1_v = TREE_OPERAND(c1arg1, 0);
+        c1arg2_v = TREE_OPERAND(c1arg2, 0);
+        if (dump_file)
+            fprintf(dump_file, "c1arg2_v %s\n", print_generic_expr_to_str(c1arg2_v));
+        if (dump_file)
+            fprintf(dump_file, "c1arg2_v Treecode %s\n", get_tree_code_name(TREE_CODE(c1arg2_v))); // addr_expr
+        if ((TREE_CODE(c1arg1_v) != VAR_DECL))
+        {
+            goto dont_take;
+        }
+        if ((TREE_CODE(c1arg2_v) != STRING_CST))
+        {
+            goto dont_take;
+        }
+        nbytes = TREE_STRING_LENGTH(c1arg2_v);
+        if (nbytes != 31)
+        {
+            goto dont_take;
+        }
+        tmp_buf = TREE_STRING_POINTER(c1arg2_v);
+        if (dump_file)
+            fprintf(dump_file, "Len of String%d\n", nbytes);
+        if (dump_file)
+            fprintf(dump_file, "Character Sequence for transfer #%s#\n", tmp_buf);
+        // is the variable reference so far in any bind statement
+        if (dump_file)
+            fprintf(dump_file, "bind var_decl %d\n", vec_safe_length(*locbind_vardecl));
+        c1arg_v_islocal = 0;
+        for (unsigned ii = 0; ii < vec_safe_length(*locbind_vardecl); ii += 1)
+        {
+            llocbind_vardecl = *locbind_vardecl;
+            if (dump_file)
+            fprintf(dump_file, "locally defined %s \n", print_generic_expr_to_str((*llocbind_vardecl)[ii]));
+            if ((*llocbind_vardecl)[ii] == c1arg1_v)
+            {
+            if (dump_file)
+      fprintf(dump_file, "Is local %s \n", print_generic_expr_to_str(c1arg1_v));
+            c1arg_v_islocal += 1;
+            }
+        }
+
+        if (TREE_TYPE(c1arg1_v) && TREE_CODE(TREE_TYPE(c1arg1_v)) == ARRAY_TYPE)
+        {
+            tree tmp;
+
+            /* Print array's type.  */
+            tmp = TREE_TYPE(c1arg1_v);
+            while (TREE_CODE(TREE_TYPE(tmp)) == ARRAY_TYPE)
+            tmp = TREE_TYPE(tmp);
+            if (dump_file)
+            fprintf(dump_file, "var_decl c1arg1_v %s\n", print_generic_expr_to_str(TREE_TYPE(tmp)));
+            if (strcmp("char", print_generic_expr_to_str(TREE_TYPE(tmp))) != 0)
+            {
+            goto dont_take;
+            }
+            if (dump_file)
+            fprintf(dump_file, "var_decl c1arg1_v %s\n", print_generic_expr_to_str(c1arg1_v));
+            /* Print the dimensions.  */
+            tmp = TREE_TYPE(c1arg1_v);
+            while (TREE_CODE(tmp) == ARRAY_TYPE)
+            {
+            tree min = TYPE_MIN_VALUE(TYPE_DOMAIN(tmp));
+            tree max = TYPE_MAX_VALUE(TYPE_DOMAIN(tmp));
+            if (dump_file)
+      fprintf(dump_file, "var_decl c1arg1_v min %s\n", print_generic_expr_to_str(min));
+            if (dump_file)
+      fprintf(dump_file, "var_decl c1arg1_v max %s\n", print_generic_expr_to_str(max));
+            if (dump_file)
+      fprintf(dump_file, "var_decl c1arg1_v minnr %ld\n", tree_to_shwi(min));
+            if (dump_file)
+      fprintf(dump_file, "var_decl c1arg1_v maxnr %ld\n", tree_to_shwi(max));
+            if (tree_to_shwi(min) != 0)
+            {
+      goto dont_take;
+            }
+            if (tree_to_shwi(max) != 30)
+            {
+      goto dont_take;
+            }
+            tmp = TREE_TYPE(tmp);
+            }
+        }
+
+        gsi_remove(&i, true);
+
+        // we have now to decide was is the best option
+        // for no-inline g0, we take the full blow version
+        // for inline, we take the shortened version
+        if (flag_no_inline == 0)
+        {
+            option_strcpy_inline = 1;
+        }
+        else
+        {
+            option_strcpy_inline = 1;
+        }
+        if (flag_lto)
+            option_strcpy_inline = 0;
+
+        if (option_strcpy_inline == 0)
+        {
+            i_pmemw = create_tmp_var_raw(build_pointer_type(unsigned_type_node));
+            i_pmems = create_tmp_var_raw(build_pointer_type(short_unsigned_type_node));
+            i_pmemc = create_tmp_var_raw(build_pointer_type(char_type_node));
+            gimpleassign = gimple_build_assign(i_pmemw, c1arg1);
+            gsi_insert_before(&i, gimpleassign, GSI_NEW_STMT);
+            immed = (tmp_buf[3] << 24) + (tmp_buf[2] << 16) + (tmp_buf[1] << 8) + tmp_buf[0];
+            gimpleassign = gimple_build_assign(build2(MEM_REF, unsigned_type_node, i_pmemw, build_int_cst(TREE_TYPE(i_pmemw), 0)), build_int_cstu(unsigned_type_node, immed));
+            gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+            gimpleassign = gimple_build_assign(i_pmemw, POINTER_PLUS_EXPR, i_pmemw, build_int_cstu(unsigned_type_node, 4));
+            gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+            immed = (tmp_buf[7] << 24) + (tmp_buf[6] << 16) + (tmp_buf[5] << 8) + tmp_buf[4];
+            gimpleassign = gimple_build_assign(build2(MEM_REF, unsigned_type_node, i_pmemw, build_int_cst(TREE_TYPE(i_pmemw), 0)), build_int_cstu(unsigned_type_node, immed));
+            gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+            gimpleassign = gimple_build_assign(i_pmemw, POINTER_PLUS_EXPR, i_pmemw, build_int_cstu(unsigned_type_node, 4));
+            gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+            immed = (tmp_buf[11] << 24) + (tmp_buf[10] << 16) + (tmp_buf[9] << 8) + tmp_buf[8];
+            gimpleassign = gimple_build_assign(build2(MEM_REF, unsigned_type_node, i_pmemw, build_int_cst(TREE_TYPE(i_pmemw), 0)), build_int_cstu(unsigned_type_node, immed));
+            gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+            gimpleassign = gimple_build_assign(i_pmemw, POINTER_PLUS_EXPR, i_pmemw, build_int_cstu(unsigned_type_node, 4));
+            gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+            immed = (tmp_buf[15] << 24) + (tmp_buf[14] << 16) + (tmp_buf[13] << 8) + tmp_buf[12];
+            gimpleassign = gimple_build_assign(build2(MEM_REF, unsigned_type_node, i_pmemw, build_int_cst(TREE_TYPE(i_pmemw), 0)), build_int_cstu(unsigned_type_node, immed));
+            gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+            gimpleassign = gimple_build_assign(i_pmemw, POINTER_PLUS_EXPR, i_pmemw, build_int_cstu(unsigned_type_node, 4));
+            gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+            immed = (tmp_buf[19] << 24) + (tmp_buf[18] << 16) + (tmp_buf[17] << 8) + tmp_buf[16];
+            gimpleassign = gimple_build_assign(build2(MEM_REF, unsigned_type_node, i_pmemw, build_int_cst(TREE_TYPE(i_pmemw), 0)), build_int_cstu(unsigned_type_node, immed));
+            gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+            gimpleassign = gimple_build_assign(i_pmemw, POINTER_PLUS_EXPR, i_pmemw, build_int_cstu(unsigned_type_node, 4));
+            gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+            immed = (tmp_buf[23] << 24) + (tmp_buf[22] << 16) + (tmp_buf[21] << 8) + tmp_buf[20];
+            gimpleassign = gimple_build_assign(build2(MEM_REF, unsigned_type_node, i_pmemw, build_int_cst(TREE_TYPE(i_pmemw), 0)), build_int_cstu(unsigned_type_node, immed));
+            gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+            gimpleassign = gimple_build_assign(i_pmemw, POINTER_PLUS_EXPR, i_pmemw, build_int_cstu(unsigned_type_node, 4));
+            gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+            immed = (tmp_buf[27] << 24) + (tmp_buf[26] << 16) + (tmp_buf[25] << 8) + tmp_buf[24];
+            gimpleassign = gimple_build_assign(build2(MEM_REF, unsigned_type_node, i_pmemw, build_int_cst(TREE_TYPE(i_pmemw), 0)), build_int_cstu(unsigned_type_node, immed));
+            gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+            gimpleassign = gimple_build_assign(i_pmems, c1arg1);
+            gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+            gimpleassign = gimple_build_assign(i_pmems, POINTER_PLUS_EXPR, i_pmems, build_int_cstu(unsigned_type_node, 28));
+            gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+            immed = (tmp_buf[29] << 8) + tmp_buf[28];
+            gimpleassign = gimple_build_assign(build2(MEM_REF, short_unsigned_type_node, i_pmems, build_int_cst(TREE_TYPE(i_pmems), 0)), build_int_cstu(short_unsigned_type_node, immed));
+            gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+            gimpleassign = gimple_build_assign(i_pmemc, c1arg1);
+            gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+            gimpleassign = gimple_build_assign(i_pmemc, POINTER_PLUS_EXPR, i_pmemc, build_int_cstu(unsigned_type_node, 30));
+            gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+            immed = tmp_buf[30];
+            gimpleassign = gimple_build_assign(build2(MEM_REF, char_type_node, i_pmemc, build_int_cst(TREE_TYPE(i_pmemc), 0)), build_int_cstu(char_type_node, immed));
+            gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+        }
+        else
+        {
+
+            vec<tree, va_gc> *inputs;
+            vec<tree, va_gc> *clobbers;
+            vec<tree, va_gc> *outputs;
+            tree input;
+            tree output;
+            tree clobber;
+
+            gasm *asm_or_stmt;
+            inputs = NULL;
+            input = build_tree_list(NULL_TREE, build_string(2, "a"));
+            input = chainon(NULL_TREE, build_tree_list(input, c1arg1));
+            vec_safe_push(inputs, input);
+
+            input = build_tree_list(NULL_TREE, build_string(2, "i"));
+            immed = (tmp_buf[3] << 24) + (tmp_buf[2] << 16) + (tmp_buf[1] << 8) + tmp_buf[0];
+            input = chainon(NULL_TREE, build_tree_list(input, build_int_cstu(unsigned_type_node, immed)));
+            vec_safe_push(inputs, input);
+
+            input = build_tree_list(NULL_TREE, build_string(2, "i"));
+            immed = (tmp_buf[7] << 24) + (tmp_buf[6] << 16) + (tmp_buf[5] << 8) + tmp_buf[4];
+            input = chainon(NULL_TREE, build_tree_list(input, build_int_cstu(unsigned_type_node, immed)));
+            vec_safe_push(inputs, input);
+
+            input = build_tree_list(NULL_TREE, build_string(2, "i"));
+            immed = (tmp_buf[11] << 24) + (tmp_buf[10] << 16) + (tmp_buf[9] << 8) + tmp_buf[8];
+            input = chainon(NULL_TREE, build_tree_list(input, build_int_cstu(unsigned_type_node, immed)));
+            vec_safe_push(inputs, input);
+
+            input = build_tree_list(NULL_TREE, build_string(2, "i"));
+            immed = (tmp_buf[15] << 24) + (tmp_buf[14] << 16) + (tmp_buf[13] << 8) + tmp_buf[12];
+            input = chainon(NULL_TREE, build_tree_list(input, build_int_cstu(unsigned_type_node, immed)));
+            vec_safe_push(inputs, input);
+
+            input = build_tree_list(NULL_TREE, build_string(2, "i"));
+            immed = (tmp_buf[19] << 24) + (tmp_buf[18] << 16) + (tmp_buf[17] << 8) + tmp_buf[16];
+            input = chainon(NULL_TREE, build_tree_list(input, build_int_cstu(unsigned_type_node, immed)));
+            vec_safe_push(inputs, input);
+
+            input = build_tree_list(NULL_TREE, build_string(2, "i"));
+            immed = (tmp_buf[23] << 24) + (tmp_buf[22] << 16) + (tmp_buf[21] << 8) + tmp_buf[20];
+            input = chainon(NULL_TREE, build_tree_list(input, build_int_cstu(unsigned_type_node, immed)));
+            vec_safe_push(inputs, input);
+
+            input = build_tree_list(NULL_TREE, build_string(2, "i"));
+            immed = (tmp_buf[27] << 24) + (tmp_buf[26] << 16) + (tmp_buf[25] << 8) + tmp_buf[24];
+            input = chainon(NULL_TREE, build_tree_list(input, build_int_cstu(unsigned_type_node, immed)));
+            vec_safe_push(inputs, input);
+
+            input = build_tree_list(NULL_TREE, build_string(2, "i"));
+            immed = (tmp_buf[29] << 8) + tmp_buf[28];
+            input = chainon(NULL_TREE, build_tree_list(input, build_int_cstu(unsigned_type_node, immed)));
+            vec_safe_push(inputs, input);
+
+            input = build_tree_list(NULL_TREE, build_string(2, "i"));
+            immed = tmp_buf[30];
+            input = chainon(NULL_TREE, build_tree_list(input, build_int_cstu(unsigned_type_node, immed)));
+            vec_safe_push(inputs, input);
+
+            outputs = NULL;
+            vec_safe_push(outputs, output);
+            clobbers = NULL;
+            clobber = build_tree_list(NULL_TREE, build_string(7, "memory"));
+            vec_safe_push(clobbers, clobber);
+            clobber = build_tree_list(NULL_TREE, build_string(3, "d7"));
+            vec_safe_push(clobbers, clobber);
+            asm_or_stmt = gimple_build_asm_vec(
+                "	 movh %%d7,hi:%1 \n"
+                "	 addi %%d7,%%d7,lo:%1 \n"
+                "	 st.w [%0]0,%%d7 \n"
+                "	 movh %%d7,hi:%2 \n"
+                "	 addi %%d7,%%d7,lo:%2 \n"
+                "	 st.w [%0]4,%%d7 \n"
+                "	 movh %%d7,hi:%3 \n"
+                "	 addi %%d7,%%d7,lo:%3 \n"
+                "	 st.w [%0]8,%%d7 \n"
+                "	 movh %%d7,hi:%4 \n"
+                "	 addi %%d7,%%d7,lo:%4 \n"
+                "	 st.w [%0]12,%%d7 \n"
+                "	 movh %%d7,hi:%5 \n"
+                "	 addi %%d7,%%d7,lo:%5 \n"
+                "	 st.w [%0]16,%%d7 \n"
+                "	 movh %%d7,hi:%6 \n"
+                "	 addi %%d7,%%d7,lo:%6 \n"
+                "	 st.w [%0]20,%%d7 \n"
+                "	 movh %%d7,hi:%7 \n"
+                "	 addi %%d7,%%d7,lo:%7 \n"
+                "	 st.w [%0]24,%%d7 \n"
+                "	 mov  %%d7,%8 \n"
+                "	 st.h [%0]28,%%d7 \n"
+                "	 mov  %%d7,%9 \n"
+                "	 st.b [%0]30,%%d7 \n",
+                inputs, NULL, clobbers, NULL);
+
+            gimple_asm_set_volatile(asm_or_stmt, true);
+            gsi_insert_before(&i, asm_or_stmt, GSI_NEW_STMT);
+        }
+
+        {
+            gimplebind = NULL;
+            gimpletry = NULL;
+            code_gsi = gimple_code(stmt_entry);
+            if (code_gsi == GIMPLE_BIND)
+            {
+            gimplebind = dyn_cast<gbind *>(stmt_entry);
+            if (dump_file)
+      fprintf(dump_file, "Apply Change GIMPLE_BIND %d \n", *bind_nr);
+            gimple_bind_set_body(gimplebind, seq);
+            ;
+            }
+            if (code_gsi == GIMPLE_TRY)
+            {
+            gimpletry = dyn_cast<gtry *>(stmt_entry);
+            if (dump_file)
+      fprintf(dump_file, "Apply Change GIMPLE_TRY %d \n", *bind_nr);
+            gimple_try_set_eval(gimpletry, seq);
+            }
+            if ((gimplebind == NULL) && (gimpletry == NULL))
+            {
+            goto dont_take;
+            }
+
+            //		for (int jj = (vec_safe_length (*gimples) -1) ; jj >= 0; jj--)
+            //                      {
+            //                    lgimple=*gimples;
+            //                    code_gsi = gimple_code ((*lgimple)[jj]);
+            //                        if (code_gsi==GIMPLE_CALL) {
+            //                            if (dump_file) fprintf( dump_file, "GIMPLE_CALL %d \n", jj);
+            //                           }
+            //                        if (code_gsi==GIMPLE_BIND) {
+            //                            gimplebind=dyn_cast <gbind *> ( (*lgimple)[jj]);
+            //                            if (dump_file) fprintf( dump_file, "GIMPLE_BIND %d \n", jj);
+            //                            break;
+            //                        }
+            //                        if (code_gsi==GIMPLE_TRY) {
+            //                            gimpletry=dyn_cast <gtry *> ( (*lgimple)[jj]);
+            //                            if (dump_file) fprintf( dump_file, "GIMPLE_TRY %d \n",jj);
+            //                            break;
+            //                        }
+            //                      }
+            //                if ((gimplebind==NULL) && (gimpletry==NULL)) { goto dont_take; }
+            //                if (code_gsi==GIMPLE_TRY)
+            //                  {
+            //                  gimple_try_set_eval (gimpletry, seq);
+            //                  }
+            //                if (code_gsi==GIMPLE_BIND)
+            //                  {
+            //                    gimple_bind_set_body (gimplebind, seq);;
+            //                  }
+        }
+        //                continue;
+      dont_take:;
+      }
+      if (code == GIMPLE_BIND)
+      {
+        gimplebind = dyn_cast<gbind *>(stmt);
+        tree var;
+        if (dump_file)
+            fprintf(dump_file, "recall GIMPLE_BIND\n");
+        //            for (var = gimple_bind_vars (gimplebind); var; var = DECL_CHAIN (var))
+        //              {
+        //        	if (dump_file) fprintf(dump_file,"Push local var %s\n",print_generic_expr_to_str(var));
+        //        	vec_safe_push(*locbind_vardecl, var);
+        //              }
+        tricopt_gimple_gen_stmts_strcpy(seq, i, stmt, gimples, locbind_vardecl, stmtit, stmtseq, bind_nr);
+      }
+      if (code == GIMPLE_TRY)
+      {
+        if (dump_file)
+            fprintf(dump_file, "recall GIMPLE_TRY\n");
+        gimpletry = dyn_cast<gtry *>(stmt);
+        tricopt_gimple_gen_stmts_strcpy(seq, i, stmt, gimples, locbind_vardecl, stmtit, stmtseq, bind_nr);
+      }
+      gsi_next(&i);
+  }
+  *bind_nr -= 1;
+  if (dump_file)
+      fprintf(dump_file, "GIMPLE_SCAN STRCPY LEAVE %d %d\n", gimple_len, *bind_nr);
+}
+#endif
+
+void tricopt_gimple_gen_strcpy(function *function ATTRIBUTE_UNUSED)
+{
+  tree fdecl;
+  tree args;
+  gimple_stmt_iterator i;
+  int stmt_nr;
+  int bind_nr = 0;
+
+  vec<tree, va_gc> *trvec_args = NULL;
+  vec<gimple *, va_gc> *gimples = NULL;
+  vec<tree, va_gc> *locbind_vardecl = NULL;
+  vec<gimple_stmt_iterator, va_gc> *stmtit = NULL;
+  vec<gimple_seq, va_gc> *stmtseq = NULL;
+  for (fdecl = DECL_ARGUMENTS(current_function_decl);
+       fdecl; fdecl = DECL_CHAIN(fdecl))
+  {
+      args = fdecl;
+      vec_safe_push(trvec_args, args);
+  }
+  gimple_seq body = gimple_body(current_function_decl);
+
+  if (dump_file)
+      fprintf(dump_file, "Initial Sequence strcpy\n");
+  stmt_nr = 0;
+  for (i = gsi_start(body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      tricopt_gimple_gen_stmts_strcpy(body, i, stmt, &gimples, &locbind_vardecl, &stmtit, &stmtseq, &bind_nr);
+      if (dump_file)
+        fprintf(dump_file, "Bind Body %d ", stmt_nr);
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+      stmt_nr += 1;
+      if (code == GIMPLE_BIND)
+        break;
+  }
+
+  if (dump_file)
+      fprintf(dump_file, "Length Gimples %d \n", vec_safe_length(gimples));
+  if (dump_file)
+      fprintf(dump_file, "Length Stmtit %d \n", vec_safe_length(stmtit));
+  if (dump_file)
+      fprintf(dump_file, "Length Stmrseq %d \n", vec_safe_length(stmtseq));
+  return;
+}
+
+void tricopt_gimple_gen_proc_1(function *function ATTRIBUTE_UNUSED)
+{
+  tree fdecl;
+  tree args;
+  gimple_stmt_iterator i;
+  gbind *gimplebind;
+  int stmt_nr;
+  gassign *assign;
+  gcond *gimplecond = NULL;
+  gimple *gimplecondstmt = NULL;
+  gimple_stmt_iterator gsi_cond;
+  vec<tree, va_gc> *trvec_args = NULL;
+
+  for (fdecl = DECL_ARGUMENTS(current_function_decl);
+       fdecl; fdecl = DECL_CHAIN(fdecl))
+  {
+      args = fdecl;
+      vec_safe_push(trvec_args, args);
+  }
+  gimple_seq body = gimple_body(current_function_decl);
+
+  if (dump_file)
+      fprintf(dump_file, "Initial Proc_1\n");
+  gimplebind = NULL;
+  stmt_nr = 0;
+  for (i = gsi_start(body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      if (code == GIMPLE_BIND)
+      {
+        gimplebind = dyn_cast<gbind *>(stmt);
+      }
+      if (dump_file)
+        fprintf(dump_file, "Bind Body %d ", stmt_nr);
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+      stmt_nr += 1;
+      if (code == GIMPLE_BIND)
+        break;
+  }
+  gimple_seq outer_body = gimple_bind_body(gimplebind);
+  if (dump_file)
+      fprintf(dump_file, "Gimble_Bind Begin\n");
+  stmt_nr = 0;
+  for (i = gsi_start(outer_body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      if ((code == GIMPLE_COND))
+      {
+        int fail = 0;
+        if (gimple_cond_code(stmt) != EQ_EXPR)
+            fail = 1;
+        if (strcmp(print_generic_expr_to_str(TREE_TYPE(gimple_cond_rhs(stmt))), "Enumeration") != 0)
+            fail = 1;
+        if (dump_file)
+            fprintf(dump_file, "FAIL_COND=%d \n ", fail);
+        if (dump_file)
+            fprintf(dump_file, "lhs %s\n", print_generic_expr_to_str(TREE_TYPE(gimple_cond_rhs(stmt))));
+        gimplecond = dyn_cast<gcond *>(stmt);
+        gimplecondstmt = stmt;
+        gsi_cond = i;
+      }
+      if (dump_file)
+        fprintf(dump_file, "Try %d ", stmt_nr);
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+      stmt_nr += 1;
+  }
+
+  tree lhs_xxxx = create_tmp_var_raw(long_integer_type_node);
+  tree lhs_nop_xxxx = create_tmp_var_raw(boolean_type_node);
+  tree rhs_labtrue = gimple_cond_true_label(gimplecond);
+  tree rhs_labfalse = gimple_cond_false_label(gimplecond);
+  tree rhs = gimple_cond_rhs(gimplecondstmt);
+  tree expr_lhs = gimple_cond_lhs(gimplecondstmt);
+  gsi_remove(&gsi_cond, true);
+  assign = gimple_build_assign(lhs_nop_xxxx, EQ_EXPR, expr_lhs, rhs);
+  gsi_insert_before(&gsi_cond, assign, GSI_NEW_STMT);
+  assign = gimple_build_assign(lhs_xxxx, NOP_EXPR, lhs_nop_xxxx);
+  gsi_insert_after(&gsi_cond, assign, GSI_NEW_STMT);
+  gcall *gimple_expect;
+  tree decl = NULL_TREE;
+  decl = builtin_decl_implicit(BUILT_IN_EXPECT);
+  tree lhs_expect = create_tmp_var_raw(long_integer_type_node);
+  gimple_expect = gimple_build_call(decl, 2, lhs_xxxx, build_int_cst(long_integer_type_node, 1));
+  gimple_call_set_lhs(gimple_expect, lhs_expect);
+  gsi_insert_after(&gsi_cond, gimple_expect, GSI_NEW_STMT);
+  gimplecond = gimple_build_cond(NE_EXPR, lhs_expect, build_int_cst(long_integer_type_node, 0), rhs_labtrue, rhs_labfalse);
+  gsi_insert_after(&gsi_cond, gimplecond, GSI_NEW_STMT);
+  gimple_bind_set_body(gimplebind, outer_body);
+  return;
+}
+
+void tricopt_gimple_gen_mat_add_const(function *function ATTRIBUTE_UNUSED)
+{
+  tree fdecl;
+  tree args;
+  gimple_stmt_iterator i;
+  gbind *gimplebind;
+  //  greturn *gimpleret;
+  gassign *gimpleassign;
+  gcond *gimplecond;
+  ggoto *gimplegoto;
+  //  tree tr_return;
+  vec<tree, va_gc> *inputs;
+  vec<tree, va_gc> *clobbers;
+  vec<tree, va_gc> *outputs;
+  tree input;
+  tree output;
+  tree clobber;
+  tree type = unsigned_type_node;
+
+  vec<tree, va_gc> *trvec_args = NULL;
+
+  for (fdecl = DECL_ARGUMENTS(current_function_decl);
+       fdecl; fdecl = DECL_CHAIN(fdecl))
+  {
+      args = fdecl;
+      vec_safe_push(trvec_args, args);
+  }
+  gimple_seq body = gimple_body(current_function_decl);
+
+  if (dump_file)
+      fprintf(dump_file, "Initial Sequence mat_add_const\n");
+  gimplebind = NULL;
+  //  gimpleret=NULL;
+  for (i = gsi_start(body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      if (code == GIMPLE_BIND)
+      {
+        gimplebind = dyn_cast<gbind *>(stmt);
+      }
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+  }
+  gimple_seq inner_body = gimple_bind_body(gimplebind);
+  for (i = gsi_start(inner_body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+  }
+  greturn *stmt = gimple_build_return(NULL);
+  gsi_insert_before(&i, stmt, GSI_NEW_STMT);
+
+  inner_body = gimple_bind_body(gimplebind);
+  i = gsi_start(inner_body);
+  while (!gsi_end_p(i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      switch (code)
+      {
+      case GIMPLE_RETURN:
+        gsi_next(&i);
+        if (dump_file)
+            fprintf(dump_file, "found return tree with removal!\n");
+        //          tr_return=gimple_return_retval(dyn_cast <greturn *> (stmt));
+        //          gimpleret=dyn_cast <greturn *> (stmt);
+        break;
+      default:
+        if (dump_file)
+            fprintf(dump_file, "remove stmt!\n");
+        if (dump_file)
+            print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+        gsi_next(&i);
+        break;
+      }
+  }
+
+  gasm *asm_or_stmt;
+
+  tree i_val_pack = create_tmp_var_raw(unsigned_type_node);
+  tree i_t0 = create_tmp_var_raw(long_long_integer_type_node);
+  tree i_i = create_tmp_var_raw(unsigned_type_node);
+
+  tree i_1 = create_tmp_var_raw(unsigned_type_node);
+  gimpleassign = gimple_build_assign(i_1, NOP_EXPR, (*trvec_args)[2]);
+  gsi_insert_before(&i, gimpleassign, GSI_NEW_STMT);
+  gimpleassign = gimple_build_assign(i_val_pack, BIT_AND_EXPR, i_1, build_int_cstu(unsigned_type_node, 65535));
+  gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+  tree i_2 = create_tmp_var_raw(TREE_TYPE(i_val_pack));
+  gimpleassign = gimple_build_assign(i_2, LSHIFT_EXPR, i_val_pack, build_int_cstu(unsigned_type_node, 16));
+  gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+
+  gimpleassign = gimple_build_assign(i_val_pack, BIT_IOR_EXPR, i_val_pack, i_2);
+  gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+
+  inputs = NULL;
+  input = build_tree_list(NULL_TREE, build_string(2, "a"));
+  input = chainon(NULL_TREE, build_tree_list(input, (*trvec_args)[1]));
+  vec_safe_push(inputs, input);
+  outputs = NULL;
+  output = build_tree_list(NULL_TREE, build_string(3, "=d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_t0));
+  vec_safe_push(outputs, output);
+  clobbers = NULL;
+  clobber = build_tree_list(NULL_TREE, build_string(7, "memory"));
+  vec_safe_push(clobbers, clobber);
+
+  asm_or_stmt = gimple_build_asm_vec("ld.d %A0, [%1]0", inputs, outputs, clobbers, NULL);
+  gimple_asm_set_volatile(asm_or_stmt, true);
+  gsi_insert_after(&i, asm_or_stmt, GSI_NEW_STMT);
+  gimpleassign = gimple_build_assign(i_i, build_int_cstu(unsigned_type_node, 0));
+  gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+  glabel *gD1459 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  gimplegoto = gimple_build_goto(gimple_label_label(gD1459));
+  gsi_insert_after(&i, gimplegoto, GSI_NEW_STMT);
+  glabel *gD1458 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  gsi_insert_after(&i, gD1458, GSI_NEW_STMT);
+  tree i_t1 = create_tmp_var_raw(long_long_integer_type_node);
+  outputs = NULL;
+  output = build_tree_list(NULL_TREE, build_string(3, "=a"));
+  output = chainon(NULL_TREE, build_tree_list(output, (*trvec_args)[1]));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(3, "=d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_t0));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(3, "=d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_t1));
+  vec_safe_push(outputs, output);
+  inputs = NULL;
+  input = build_tree_list(NULL_TREE, build_string(2, "d"));
+  input = chainon(NULL_TREE, build_tree_list(input, i_val_pack));
+  vec_safe_push(inputs, input);
+  input = build_tree_list(NULL_TREE, build_string(2, "0"));
+  input = chainon(NULL_TREE, build_tree_list(input, (*trvec_args)[1]));
+  vec_safe_push(inputs, input);
+  input = build_tree_list(NULL_TREE, build_string(2, "1"));
+  input = chainon(NULL_TREE, build_tree_list(input, i_t0));
+  vec_safe_push(inputs, input);
+
+  clobbers = NULL;
+  clobber = build_tree_list(NULL_TREE, build_string(7, "memory"));
+  vec_safe_push(clobbers, clobber);
+
+  asm_or_stmt = gimple_build_asm_vec("\tadd.h %L1, %L1, %3 \n"
+                                     "\tld.d %A2, [%0]8\n"
+                                     "\tadd.h %H1, %H1, %3\n"
+                                     "\tst.d [%0+]8, %A1\n"
+                                     "\tadd.h %L2, %L2, %3\n"
+                                     "\tld.d %A1, [%0]8\n"
+                                     "\tadd.h %H2, %H2, %3\n"
+                                     "\tst.d [%0+]8, %A2\n",
+                                     inputs, outputs, clobbers, NULL);
+  gimple_asm_set_volatile(asm_or_stmt, true);
+  gsi_insert_after(&i, asm_or_stmt, GSI_NEW_STMT);
+  gimpleassign = gimple_build_assign(i_i, PLUS_EXPR, i_i, build_int_cstu(unsigned_type_node, 1));
+  gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+
+  gsi_insert_after(&i, gD1459, GSI_NEW_STMT);
+  glabel *gD1460 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  gimplecond = gimple_build_cond(LE_EXPR, i_i, build_int_cstu(unsigned_type_node, 9), gimple_label_label(gD1458), gimple_label_label(gD1460));
+  gsi_insert_after(&i, gimplecond, GSI_NEW_STMT);
+  gsi_insert_after(&i, gD1460, GSI_NEW_STMT);
+
+  outputs = NULL;
+  output = build_tree_list(NULL_TREE, build_string(3, "=d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_t0));
+  vec_safe_push(outputs, output);
+  inputs = NULL;
+  input = build_tree_list(NULL_TREE, build_string(2, "a"));
+  input = chainon(NULL_TREE, build_tree_list(input, (*trvec_args)[1]));
+  vec_safe_push(inputs, input);
+  input = build_tree_list(NULL_TREE, build_string(2, "d"));
+  input = chainon(NULL_TREE, build_tree_list(input, i_val_pack));
+  vec_safe_push(inputs, input);
+  input = build_tree_list(NULL_TREE, build_string(2, "0"));
+  input = chainon(NULL_TREE, build_tree_list(input, i_t0));
+  vec_safe_push(inputs, input);
+
+  clobbers = NULL;
+  clobber = build_tree_list(NULL_TREE, build_string(7, "memory"));
+  vec_safe_push(clobbers, clobber);
+
+  asm_or_stmt = gimple_build_asm_vec("\tadd.h %L0, %L0, %2 \n"
+                                     "\tst.h [%1], %L0\n",
+                                     inputs, outputs, clobbers, NULL);
+  gimple_asm_set_volatile(asm_or_stmt, true);
+  gsi_insert_after(&i, asm_or_stmt, GSI_NEW_STMT);
+
+  greturn *gstmt = gimple_build_return(NULL);
+  gsi_insert_after(&i, gstmt, GSI_NEW_STMT);
+
+  tree false_cond;
+  tree true_cond;
+  true_cond = create_artificial_label(UNKNOWN_LOCATION);
+  false_cond = create_artificial_label(UNKNOWN_LOCATION);
+  glabel *gfalse_cond = gimple_build_label(false_cond);
+  glabel *gtrue_cond = gimple_build_label(true_cond);
+  gcond *gcond_stmt = gimple_build_cond(NE_EXPR, (*trvec_args)[0], build_int_cstu(type, 9),
+                                        true_cond, false_cond);
+  i = gsi_start(inner_body);
+  gsi_insert_before(&i, gcond_stmt, GSI_NEW_STMT);
+  gsi_insert_after(&i, gtrue_cond, GSI_NEW_STMT);
+  i = gsi_start(inner_body);
+  int false_leave = 0;
+  while (!gsi_end_p(i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      switch (code)
+      {
+      case GIMPLE_RETURN:
+        gsi_insert_after(&i, gfalse_cond, GSI_NEW_STMT);
+        false_leave = 1;
+        break;
+      default:
+        break;
+      }
+      if (false_leave == 1)
+        break;
+      gsi_next(&i);
+  }
+
+  if (dump_file)
+      fprintf(dump_file, "before gimple_bind_set_body!\n");
+  for (i = gsi_start(inner_body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+  }
+  gimple_bind_set_body(gimplebind, inner_body);
+}
+
+void tricopt_gimple_gen_mat_mul_matrix(function *function ATTRIBUTE_UNUSED)
+{
+  tree fdecl;
+  tree args;
+  gimple_stmt_iterator i;
+  gbind *gimplebind;
+  //  greturn *gimpleret;
+  gassign *gimpleassign;
+  gcond *gimplecond;
+  ggoto *gimplegoto;
+  //  tree tr_return;
+  vec<tree, va_gc> *inputs;
+  vec<tree, va_gc> *clobbers;
+  vec<tree, va_gc> *outputs;
+  tree input;
+  tree output;
+  tree clobber;
+  tree type = unsigned_type_node;
+
+  vec<tree, va_gc> *trvec_args = NULL;
+
+  for (fdecl = DECL_ARGUMENTS(current_function_decl);
+       fdecl; fdecl = DECL_CHAIN(fdecl))
+  {
+      args = fdecl;
+      vec_safe_push(trvec_args, args);
+  }
+  gimple_seq body = gimple_body(current_function_decl);
+
+  if (dump_file)
+      fprintf(dump_file, "Initial Sequence mat_mul_matrix\n");
+  gimplebind = NULL;
+  //  gimpleret=NULL;
+  for (i = gsi_start(body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      if (code == GIMPLE_BIND)
+      {
+        gimplebind = dyn_cast<gbind *>(stmt);
+      }
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+  }
+  gimple_seq inner_body = gimple_bind_body(gimplebind);
+  for (i = gsi_start(inner_body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+  }
+  greturn *stmt = gimple_build_return(NULL);
+  gsi_insert_before(&i, stmt, GSI_NEW_STMT);
+
+  inner_body = gimple_bind_body(gimplebind);
+  i = gsi_start(inner_body);
+  while (!gsi_end_p(i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      switch (code)
+      {
+      case GIMPLE_RETURN:
+        gsi_next(&i);
+        if (dump_file)
+            fprintf(dump_file, "found return tree with removal!\n");
+        //          tr_return=gimple_return_retval(dyn_cast <greturn *> (stmt));
+        //          gimpleret=dyn_cast <greturn *> (stmt);
+        break;
+      default:
+        if (dump_file)
+            fprintf(dump_file, "remove stmt!\n");
+        if (dump_file)
+            print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+        gsi_next(&i);
+        break;
+      }
+  }
+
+  gasm *asm_or_stmt;
+  tree i_i = create_tmp_var_raw(unsigned_type_node);
+  gimpleassign = gimple_build_assign(i_i, build_int_cstu(unsigned_type_node, 0));
+  gsi_insert_before(&i, gimpleassign, GSI_NEW_STMT);
+  glabel *gD1459 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  gimplegoto = gimple_build_goto(gimple_label_label(gD1459));
+  gsi_insert_after(&i, gimplegoto, GSI_NEW_STMT);
+  glabel *gD1458 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  gsi_insert_after(&i, gD1458, GSI_NEW_STMT);
+
+  tree i_l2cnt = create_tmp_var_raw(build_pointer_type(void_type_node));
+  tree i_acc0 = create_tmp_var_raw(long_long_integer_type_node);
+  tree i_acc1 = create_tmp_var_raw(long_long_integer_type_node);
+  tree i_t0 = create_tmp_var_raw(integer_type_node);
+  tree i_t1 = create_tmp_var_raw(integer_type_node);
+  tree i_t2 = create_tmp_var_raw(integer_type_node);
+  tree i_b0 = create_tmp_var_raw(long_long_integer_type_node);
+  tree i_b1 = create_tmp_var_raw(long_long_integer_type_node);
+  tree i_b2 = create_tmp_var_raw(long_long_integer_type_node);
+
+  tree il_acc = create_tmp_var_raw(long_long_integer_type_node);
+  tree il_t0 = create_tmp_var_raw(long_long_integer_type_node);
+  tree il_b1 = create_tmp_var_raw(integer_type_node);
+
+  outputs = NULL;
+  output = build_tree_list(NULL_TREE, build_string(3, "=a"));
+  output = chainon(NULL_TREE, build_tree_list(output, (*trvec_args)[3]));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(3, "=a"));
+  output = chainon(NULL_TREE, build_tree_list(output, (*trvec_args)[1]));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(4, "=&a"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_l2cnt));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(4, "=&d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_acc0));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(4, "=&d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_acc1));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(4, "=&d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_t0));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(4, "=&d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_t1));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(4, "=&d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_t2));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(4, "=&d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_b0));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(4, "=&d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_b1));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(4, "=&d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_b2));
+  vec_safe_push(outputs, output);
+  inputs = NULL;
+  input = build_tree_list(NULL_TREE, build_string(2, "a"));
+  input = chainon(NULL_TREE, build_tree_list(input, (*trvec_args)[2]));
+  vec_safe_push(inputs, input);
+  input = build_tree_list(NULL_TREE, build_string(2, "0"));
+  input = chainon(NULL_TREE, build_tree_list(input, (*trvec_args)[3]));
+  vec_safe_push(inputs, input);
+  input = build_tree_list(NULL_TREE, build_string(2, "1"));
+  input = chainon(NULL_TREE, build_tree_list(input, (*trvec_args)[1]));
+  vec_safe_push(inputs, input);
+
+  clobbers = NULL;
+  clobber = build_tree_list(NULL_TREE, build_string(7, "memory"));
+  vec_safe_push(clobbers, clobber);
+
+  asm_or_stmt = gimple_build_asm_vec(
+      "\tld.h %5, [%11] \n" \
+      "\tld.d %A8, [%0+](9*2) \n" \
+      "\tmov.a %2, 2-1 \n" \
+      "\t.LL%=: \n" \
+      "\tld.h %7, [%11]1*2 \n" \
+      "\tmul.h %A3, %L8, %5LL,0 \n" \
+      "\tld.d %A9, [%0+](9*2) \n" \
+      "\tmul.h %A4, %H8, %5LL,0 \n" \
+      "\tld.h %6, [%11]2*2 \n" \
+      "\tmadd.h %A3, %A3, %L9, %7LL,0 \n" \
+      "\tld.d %A10, [%0+](9*2) \n" \
+      "\tmadd.h %A4, %A4, %H9, %7LL,0 \n" \
+      "\tld.h %7, [%11]3*2 \n" \
+      "\tmadd.h %A3, %A3, %L10, %6LL,0 \n" \
+      "\tld.d %A8, [%0+](9*2) \n" \
+      "\tmadd.h %A4, %A4, %H10, %6LL,0 \n" \
+      "\tld.h %6, [%11]4*2 \n" \
+      "\tmadd.h %A3, %A3, %L8, %7LL,0 \n" \
+      "\tld.d %A9, [%0+](9*2) \n" \
+      "\tmadd.h %A4, %A4, %H8, %7LL,0 \n" \
+      "\tld.h %7, [%11]5*2 \n" \
+      "\tmadd.h %A3, %A3, %L9, %6LL,0 \n" \
+      "\tld.d %A10, [%0+](9*2) \n" \
+      "\tmadd.h %A4, %A4, %H9, %6LL,0 \n" \
+      "\tld.h %6, [%11]6*2 \n" \
+      "\tmadd.h %A3, %A3, %L10, %7LL,0 \n" \
+      "\tld.d %A8, [%0+](9*2) \n" \
+      "\tmadd.h %A4, %A4, %H10, %7LL,0 \n" \
+      "\tld.h %7, [%11]7*2 \n" \
+      "\tmadd.h %A3, %A3, %L8, %6LL,0 \n" \
+      "\tld.d %A9, [%0+](9*2) \n" \
+      "\tmadd.h %A4, %A4, %H8, %6LL,0 \n" \
+      "\tld.h %6, [%11]8*2 \n" \
+      "\tmadd.h %A3, %A3, %L9, %7LL,0 \n" \
+      "\tld.d %A10, [%0+]((4 - 8*9)*2) \n" \
+      "\tmadd.h %A4, %A4, %H9, %7LL,0 \n" \
+      "\tld.d %A8, [%0+](9*2) \n" \
+      "\tmadd.h %A3, %A3, %L10, %6LL,0 \n" \
+      "\tst.d [%1+]8, %A3 \n" \
+      "\tmadd.h %A4, %A4, %H10, %6LL,0 \n" \
+      "\tst.d [%1+]8, %A4 \n" \
+      "\tloop %2, .LL%= \n", \
+      inputs, outputs, clobbers, NULL);
+
+  gimple_asm_set_volatile(asm_or_stmt, true);
+  gsi_insert_after(&i, asm_or_stmt, GSI_NEW_STMT);
+
+  outputs = NULL;
+  output = build_tree_list(NULL_TREE, build_string(3, "=a"));
+  output = chainon(NULL_TREE, build_tree_list(output, (*trvec_args)[2]));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(3, "=a"));
+  output = chainon(NULL_TREE, build_tree_list(output, (*trvec_args)[3]));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(3, "=a"));
+  output = chainon(NULL_TREE, build_tree_list(output, (*trvec_args)[1]));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(3, "=d"));
+  output = chainon(NULL_TREE, build_tree_list(output, il_acc));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(4, "=&d"));
+  output = chainon(NULL_TREE, build_tree_list(output, il_t0));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(3, "=d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_b0));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(4, "=&d"));
+  output = chainon(NULL_TREE, build_tree_list(output, il_b1));
+  vec_safe_push(outputs, output);
+  inputs = NULL;
+  input = build_tree_list(NULL_TREE, build_string(2, "0"));
+  input = chainon(NULL_TREE, build_tree_list(input, (*trvec_args)[2]));
+  vec_safe_push(inputs, input);
+  input = build_tree_list(NULL_TREE, build_string(2, "1"));
+  input = chainon(NULL_TREE, build_tree_list(input, (*trvec_args)[3]));
+  vec_safe_push(inputs, input);
+  input = build_tree_list(NULL_TREE, build_string(2, "2"));
+  input = chainon(NULL_TREE, build_tree_list(input, (*trvec_args)[1]));
+  vec_safe_push(inputs, input);
+  input = build_tree_list(NULL_TREE, build_string(2, "5"));
+  input = chainon(NULL_TREE, build_tree_list(input, i_b0));
+  vec_safe_push(inputs, input);
+
+  clobbers = NULL;
+  clobber = build_tree_list(NULL_TREE, build_string(7, "memory"));
+  vec_safe_push(clobbers, clobber);
+
+  asm_or_stmt = gimple_build_asm_vec(
+      "\tld.d %A4, [%0+](9*2) \n" \
+      "\tld.h %6, [%1+](9*2) \n" \
+      "\tmul.h %A3, %L5, %L4LL,0 \n" \
+      "\tld.h %L5, [%1+](9*2) \n" \
+      "\tmadd.h %A3, %A3, %6, %L4LU,0 \n" \
+      "\tld.h %6, [%1+](9*2) \n" \
+      "\tmadd.h %A3, %A3, %L5, %H4LL,0 \n" \
+      "\tld.h %L5, [%1+](9*2) \n" \
+      "\tmadd.h %A3, %A3, %6, %H4LU,0 \n" \
+      "\tld.d %A4, [%0](1*8 - 9*2) \n" \
+      "\tld.h %6, [%1+](9*2) \n" \
+      "\tmadd.h %A3, %A3, %L5, %L4LL,0 \n" \
+      "\tld.h %L5, [%1+](9*2) \n" \
+      "\tmadd.h %A3, %A3, %6, %L4LU,0 \n" \
+      "\tld.h %H5, [%1+](9*2) \n" \
+      "\tld.h %6, [%1+](-(8 + 8*9)*2) \n" \
+      "\tmadd.h %A3, %A3, %L5, %H4LL,0 \n" \
+      "\tld.h %L4, [%0](2*8 - 9*2) \n" \
+      "\tmadd.h %A3, %A3, %H5, %H4LU,0 \n" \
+      "\tmadd.h %A3, %A3, %6, %L4LL,0 \n" \
+      "\tst.w [%2+], %L3 \n", \
+      inputs, outputs, clobbers, NULL);
+
+  gimple_asm_set_volatile(asm_or_stmt, true);
+  gsi_insert_after(&i, asm_or_stmt, GSI_NEW_STMT);
+
+  gimpleassign = gimple_build_assign(i_i, PLUS_EXPR, i_i, build_int_cstu(unsigned_type_node, 1));
+  gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+  gsi_insert_after(&i, gD1459, GSI_NEW_STMT);
+  glabel *gD1460 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  gimplecond = gimple_build_cond(LE_EXPR, i_i, build_int_cstu(unsigned_type_node, 8), gimple_label_label(gD1458), gimple_label_label(gD1460));
+  gsi_insert_after(&i, gimplecond, GSI_NEW_STMT);
+  gsi_insert_after(&i, gD1460, GSI_NEW_STMT);
+  greturn *gstmt = gimple_build_return(NULL);
+  gsi_insert_after(&i, gstmt, GSI_NEW_STMT);
+
+  tree false_cond;
+  tree true_cond;
+  true_cond = create_artificial_label(UNKNOWN_LOCATION);
+  false_cond = create_artificial_label(UNKNOWN_LOCATION);
+  glabel *gfalse_cond = gimple_build_label(false_cond);
+  glabel *gtrue_cond = gimple_build_label(true_cond);
+  gcond *gcond_stmt = gimple_build_cond(NE_EXPR, (*trvec_args)[0], build_int_cstu(type, 9),
+                                        true_cond, false_cond);
+  i = gsi_start(inner_body);
+  gsi_insert_before(&i, gcond_stmt, GSI_NEW_STMT);
+  gsi_insert_after(&i, gtrue_cond, GSI_NEW_STMT);
+  i = gsi_start(inner_body);
+  int false_leave = 0;
+  while (!gsi_end_p(i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      switch (code)
+      {
+      case GIMPLE_RETURN:
+        gsi_insert_after(&i, gfalse_cond, GSI_NEW_STMT);
+        false_leave = 1;
+        break;
+      default:
+        break;
+      }
+      if (false_leave == 1)
+        break;
+      gsi_next(&i);
+  }
+
+  if (dump_file)
+      fprintf(dump_file, "before gimple_bind_set_body!\n");
+  for (i = gsi_start(inner_body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+  }
+  gimple_bind_set_body(gimplebind, inner_body);
+}
+
+void tricopt_gimple_gen_mat_mul_vect(function *function ATTRIBUTE_UNUSED)
+{
+  tree fdecl;
+  tree args;
+  gimple_stmt_iterator i;
+  gbind *gimplebind;
+  //  greturn *gimpleret;
+  gassign *gimpleassign;
+  gcond *gimplecond;
+  ggoto *gimplegoto;
+  //  tree tr_return;
+  vec<tree, va_gc> *inputs;
+  vec<tree, va_gc> *clobbers;
+  vec<tree, va_gc> *outputs;
+  tree input;
+  tree output;
+  tree clobber;
+  tree type = unsigned_type_node;
+
+  vec<tree, va_gc> *trvec_args = NULL;
+
+  for (fdecl = DECL_ARGUMENTS(current_function_decl);
+       fdecl; fdecl = DECL_CHAIN(fdecl))
+  {
+      args = fdecl;
+      vec_safe_push(trvec_args, args);
+  }
+  gimple_seq body = gimple_body(current_function_decl);
+
+  if (dump_file)
+      fprintf(dump_file, "Initial Sequence mat_mul_vect\n");
+  gimplebind = NULL;
+  //  gimpleret=NULL;
+  for (i = gsi_start(body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      if (code == GIMPLE_BIND)
+      {
+        gimplebind = dyn_cast<gbind *>(stmt);
+      }
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+  }
+  gimple_seq inner_body = gimple_bind_body(gimplebind);
+  for (i = gsi_start(inner_body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+  }
+  greturn *stmt = gimple_build_return(NULL);
+  gsi_insert_before(&i, stmt, GSI_NEW_STMT);
+
+  inner_body = gimple_bind_body(gimplebind);
+  i = gsi_start(inner_body);
+  while (!gsi_end_p(i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      switch (code)
+      {
+      case GIMPLE_RETURN:
+        gsi_next(&i);
+        if (dump_file)
+            fprintf(dump_file, "found return tree with removal!\n");
+        //          tr_return=gimple_return_retval(dyn_cast <greturn *> (stmt));
+        //          gimpleret=dyn_cast <greturn *> (stmt);
+        break;
+      default:
+        if (dump_file)
+            fprintf(dump_file, "remove stmt!\n");
+        if (dump_file)
+            print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+        gsi_next(&i);
+        break;
+      }
+  }
+
+  gasm *asm_or_stmt;
+  tree i_b0 = create_tmp_var_raw(long_long_integer_type_node);
+  tree i_b1 = create_tmp_var_raw(long_long_integer_type_node);
+  tree i_i = create_tmp_var_raw(unsigned_type_node);
+  inputs = NULL;
+  input = build_tree_list(NULL_TREE, build_string(2, "a"));
+  input = chainon(NULL_TREE, build_tree_list(input, (*trvec_args)[3]));
+  vec_safe_push(inputs, input);
+  outputs = NULL;
+  output = build_tree_list(NULL_TREE, build_string(3, "=d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_b0));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(3, "=d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_b1));
+  vec_safe_push(outputs, output);
+  clobbers = NULL;
+  clobber = build_tree_list(NULL_TREE, build_string(7, "memory"));
+  vec_safe_push(clobbers, clobber);
+
+  asm_or_stmt = gimple_build_asm_vec("\tld.d %A0, [%2]0\n"
+                                     "\tld.d %A1, [%2]8\n",
+                                     inputs, outputs, clobbers, NULL);
+  gimple_asm_set_volatile(asm_or_stmt, true);
+  gsi_insert_before(&i, asm_or_stmt, GSI_NEW_STMT);
+  gimpleassign = gimple_build_assign(i_i, build_int_cstu(unsigned_type_node, 0));
+  gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+  glabel *gD1459 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  gimplegoto = gimple_build_goto(gimple_label_label(gD1459));
+  gsi_insert_after(&i, gimplegoto, GSI_NEW_STMT);
+  glabel *gD1458 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  gsi_insert_after(&i, gD1458, GSI_NEW_STMT);
+  tree i_t0 = create_tmp_var_raw(long_long_integer_type_node);
+  tree i_t1 = create_tmp_var_raw(long_long_integer_type_node);
+  tree i_acc = create_tmp_var_raw(long_long_integer_type_node);
+
+  outputs = NULL;
+  output = build_tree_list(NULL_TREE, build_string(3, "=a"));
+  output = chainon(NULL_TREE, build_tree_list(output, (*trvec_args)[2]));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(3, "=a"));
+  output = chainon(NULL_TREE, build_tree_list(output, (*trvec_args)[1]));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(3, "=d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_acc));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(3, "=d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_t0));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(3, "=d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_t1));
+  vec_safe_push(outputs, output);
+  inputs = NULL;
+  input = build_tree_list(NULL_TREE, build_string(2, "a"));
+  input = chainon(NULL_TREE, build_tree_list(input, (*trvec_args)[3]));
+  vec_safe_push(inputs, input);
+  input = build_tree_list(NULL_TREE, build_string(2, "d"));
+  input = chainon(NULL_TREE, build_tree_list(input, i_b0));
+  vec_safe_push(inputs, input);
+  input = build_tree_list(NULL_TREE, build_string(2, "d"));
+  input = chainon(NULL_TREE, build_tree_list(input, i_b1));
+  vec_safe_push(inputs, input);
+  input = build_tree_list(NULL_TREE, build_string(2, "0"));
+  input = chainon(NULL_TREE, build_tree_list(input, (*trvec_args)[2]));
+  vec_safe_push(inputs, input);
+  input = build_tree_list(NULL_TREE, build_string(2, "1"));
+  input = chainon(NULL_TREE, build_tree_list(input, (*trvec_args)[1]));
+  vec_safe_push(inputs, input);
+
+  clobbers = NULL;
+  clobber = build_tree_list(NULL_TREE, build_string(7, "memory"));
+  vec_safe_push(clobbers, clobber);
+
+  asm_or_stmt = gimple_build_asm_vec(
+      "\tld.d %A3, [%0+]8 \n"
+      "\tld.d %A4, [%0+]8\n"
+      "\tmulm.h %A2, %L3, %L6UL,0\n"
+      "\tmaddm.h %A2, %A2, %H3, %H6UL,0\n"
+      "\tld.hu %L3, [%0+]2\n"
+      "\tmaddm.h %A2, %A2, %L4, %L7UL,0\n"
+      "\tld.hu %H3, [%5]16\n"
+      "\tmaddm.h %A2, %A2, %H4, %H7UL,0\n"
+      "\tmaddm.h %A2, %A2, %L3, %H3UL,0\n"
+      "\tst.q [%1+]2, %L2\n"
+      "\tst.h [%1+], %H2\n",
+      inputs, outputs, clobbers, NULL);
+  gimple_asm_set_volatile(asm_or_stmt, true);
+  gsi_insert_after(&i, asm_or_stmt, GSI_NEW_STMT);
+
+  gimpleassign = gimple_build_assign(i_i, PLUS_EXPR, i_i, build_int_cstu(unsigned_type_node, 1));
+  gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+  gsi_insert_after(&i, gD1459, GSI_NEW_STMT);
+  glabel *gD1460 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  gimplecond = gimple_build_cond(LE_EXPR, i_i, build_int_cstu(unsigned_type_node, 8), gimple_label_label(gD1458), gimple_label_label(gD1460));
+  gsi_insert_after(&i, gimplecond, GSI_NEW_STMT);
+  gsi_insert_after(&i, gD1460, GSI_NEW_STMT);
+  greturn *gstmt = gimple_build_return(NULL);
+  gsi_insert_after(&i, gstmt, GSI_NEW_STMT);
+
+  tree false_cond;
+  tree true_cond;
+  true_cond = create_artificial_label(UNKNOWN_LOCATION);
+  false_cond = create_artificial_label(UNKNOWN_LOCATION);
+  glabel *gfalse_cond = gimple_build_label(false_cond);
+  glabel *gtrue_cond = gimple_build_label(true_cond);
+  gcond *gcond_stmt = gimple_build_cond(NE_EXPR, (*trvec_args)[0], build_int_cstu(type, 9),
+                                        true_cond, false_cond);
+  i = gsi_start(inner_body);
+  gsi_insert_before(&i, gcond_stmt, GSI_NEW_STMT);
+  gsi_insert_after(&i, gtrue_cond, GSI_NEW_STMT);
+  i = gsi_start(inner_body);
+  int false_leave = 0;
+  while (!gsi_end_p(i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      switch (code)
+      {
+      case GIMPLE_RETURN:
+        gsi_insert_after(&i, gfalse_cond, GSI_NEW_STMT);
+        false_leave = 1;
+        break;
+      default:
+        break;
+      }
+      if (false_leave == 1)
+        break;
+      gsi_next(&i);
+  }
+  if (dump_file)
+      fprintf(dump_file, "before gimple_bind_set_body!\n");
+  for (i = gsi_start(inner_body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+  }
+  gimple_bind_set_body(gimplebind, inner_body);
+}
+
+void tricopt_gimple_gen_mat_mul_const(function *function ATTRIBUTE_UNUSED)
+{
+  tree fdecl;
+  tree args;
+  gimple_stmt_iterator i;
+  gbind *gimplebind;
+  //  greturn *gimpleret;
+  gassign *gimpleassign;
+  gcond *gimplecond;
+  ggoto *gimplegoto;
+  //  tree tr_return;
+  vec<tree, va_gc> *inputs;
+  vec<tree, va_gc> *clobbers;
+  vec<tree, va_gc> *outputs;
+  tree input;
+  tree output;
+  tree clobber;
+  tree type = unsigned_type_node;
+
+  vec<tree, va_gc> *trvec_args = NULL;
+
+  for (fdecl = DECL_ARGUMENTS(current_function_decl);
+       fdecl; fdecl = DECL_CHAIN(fdecl))
+  {
+      args = fdecl;
+      vec_safe_push(trvec_args, args);
+  }
+  gimple_seq body = gimple_body(current_function_decl);
+
+  if (dump_file)
+      fprintf(dump_file, "Initial Sequence mat_mul_const\n");
+  gimplebind = NULL;
+  //  gimpleret=NULL;
+  for (i = gsi_start(body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      if (code == GIMPLE_BIND)
+      {
+        gimplebind = dyn_cast<gbind *>(stmt);
+      }
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+  }
+  gimple_seq inner_body = gimple_bind_body(gimplebind);
+  for (i = gsi_start(inner_body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+  }
+  greturn *stmt = gimple_build_return(NULL);
+  gsi_insert_before(&i, stmt, GSI_NEW_STMT);
+
+  inner_body = gimple_bind_body(gimplebind);
+  i = gsi_start(inner_body);
+  while (!gsi_end_p(i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      switch (code)
+      {
+      case GIMPLE_RETURN:
+        gsi_next(&i);
+        if (dump_file)
+            fprintf(dump_file, "found return tree with removal!\n");
+        //          tr_return=gimple_return_retval(dyn_cast <greturn *> (stmt));
+        //          gimpleret=dyn_cast <greturn *> (stmt);
+        break;
+      default:
+        if (dump_file)
+            fprintf(dump_file, "remove stmt!\n");
+        if (dump_file)
+            print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+        gsi_next(&i);
+        break;
+      }
+  }
+
+  gasm *asm_or_stmt;
+  tree i_t0 = create_tmp_var_raw(long_long_integer_type_node);
+
+  inputs = NULL;
+  input = build_tree_list(NULL_TREE, build_string(2, "1"));
+  input = chainon(NULL_TREE, build_tree_list(input, (*trvec_args)[2]));
+  vec_safe_push(inputs, input);
+  outputs = NULL;
+  output = build_tree_list(NULL_TREE, build_string(3, "=d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_t0));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(3, "=a"));
+  output = chainon(NULL_TREE, build_tree_list(output, (*trvec_args)[2]));
+  vec_safe_push(outputs, output);
+  clobbers = NULL;
+  clobber = build_tree_list(NULL_TREE, build_string(7, "memory"));
+  vec_safe_push(clobbers, clobber);
+
+  asm_or_stmt = gimple_build_asm_vec("ld.d %A0, [%1+]8", inputs, outputs, clobbers, NULL);
+  gimple_asm_set_volatile(asm_or_stmt, true);
+  gsi_insert_before(&i, asm_or_stmt, GSI_NEW_STMT);
+  tree i_i = create_tmp_var_raw(unsigned_type_node);
+  gimpleassign = gimple_build_assign(i_i, build_int_cstu(unsigned_type_node, 0));
+  gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+  glabel *gD1459 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  gimplegoto = gimple_build_goto(gimple_label_label(gD1459));
+  gsi_insert_after(&i, gimplegoto, GSI_NEW_STMT);
+  glabel *gD1458 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  gsi_insert_after(&i, gD1458, GSI_NEW_STMT);
+  tree i_t1 = create_tmp_var_raw(long_long_integer_type_node);
+  tree i_t2 = create_tmp_var_raw(long_long_integer_type_node);
+
+  outputs = NULL;
+  output = build_tree_list(NULL_TREE, build_string(3, "=a"));
+  output = chainon(NULL_TREE, build_tree_list(output, (*trvec_args)[2]));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(3, "=a"));
+  output = chainon(NULL_TREE, build_tree_list(output, (*trvec_args)[1]));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(3, "=d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_t0));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(3, "=d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_t1));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(3, "=d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_t2));
+  vec_safe_push(outputs, output);
+  inputs = NULL;
+  input = build_tree_list(NULL_TREE, build_string(2, "d"));
+  input = chainon(NULL_TREE, build_tree_list(input, (*trvec_args)[3]));
+  vec_safe_push(inputs, input);
+  input = build_tree_list(NULL_TREE, build_string(2, "0"));
+  input = chainon(NULL_TREE, build_tree_list(input, (*trvec_args)[2]));
+  vec_safe_push(inputs, input);
+  input = build_tree_list(NULL_TREE, build_string(2, "1"));
+  input = chainon(NULL_TREE, build_tree_list(input, (*trvec_args)[1]));
+  vec_safe_push(inputs, input);
+  input = build_tree_list(NULL_TREE, build_string(2, "2"));
+  input = chainon(NULL_TREE, build_tree_list(input, i_t0));
+  vec_safe_push(inputs, input);
+
+  clobbers = NULL;
+  clobber = build_tree_list(NULL_TREE, build_string(7, "memory"));
+  vec_safe_push(clobbers, clobber);
+
+  asm_or_stmt = gimple_build_asm_vec("\tld.d %A3, [%0+]8 \n"
+                                     "\tmul.h %A4, %L2, %5LL,0\n"
+                                     "\tst.d [%1+]8, %A4\n"
+                                     "\tmul.h %A4, %H2, %5LL,0\n"
+                                     "\tst.d [%1+]8, %A4\n"
+                                     "\tld.d %A2, [%0+]8\n"
+                                     "\tmul.h %A4, %L3, %5LL,0\n"
+                                     "\tst.d [%1+]8, %A4\n"
+                                     "\tmul.h %A4, %H3, %5LL,0\n"
+                                     "\tst.d [%1+]8, %A4\n",
+                                     inputs, outputs, clobbers, NULL);
+  gimple_asm_set_volatile(asm_or_stmt, true);
+  gsi_insert_after(&i, asm_or_stmt, GSI_NEW_STMT);
+
+  gimpleassign = gimple_build_assign(i_i, PLUS_EXPR, i_i, build_int_cstu(unsigned_type_node, 1));
+  gsi_insert_after(&i, gimpleassign, GSI_NEW_STMT);
+
+  gsi_insert_after(&i, gD1459, GSI_NEW_STMT);
+  glabel *gD1460 = gimple_build_label(create_artificial_label(UNKNOWN_LOCATION));
+  gimplecond = gimple_build_cond(LE_EXPR, i_i, build_int_cstu(unsigned_type_node, 9), gimple_label_label(gD1458), gimple_label_label(gD1460));
+  gsi_insert_after(&i, gimplecond, GSI_NEW_STMT);
+  gsi_insert_after(&i, gD1460, GSI_NEW_STMT);
+  outputs = NULL;
+  output = build_tree_list(NULL_TREE, build_string(3, "=d"));
+  output = chainon(NULL_TREE, build_tree_list(output, i_t0));
+  vec_safe_push(outputs, output);
+  inputs = NULL;
+  input = build_tree_list(NULL_TREE, build_string(2, "a"));
+  input = chainon(NULL_TREE, build_tree_list(input, (*trvec_args)[1]));
+  vec_safe_push(inputs, input);
+  input = build_tree_list(NULL_TREE, build_string(2, "d"));
+  input = chainon(NULL_TREE, build_tree_list(input, (*trvec_args)[3]));
+  vec_safe_push(inputs, input);
+  input = build_tree_list(NULL_TREE, build_string(2, "0"));
+  input = chainon(NULL_TREE, build_tree_list(input, i_t0));
+  vec_safe_push(inputs, input);
+
+  clobbers = NULL;
+  clobber = build_tree_list(NULL_TREE, build_string(7, "memory"));
+  vec_safe_push(clobbers, clobber);
+
+  asm_or_stmt = gimple_build_asm_vec("\tmul.h %A0, %L0, %2LL,0 \n"
+                                     "\tst.w [%1], %L0\n",
+                                     inputs, outputs, clobbers, NULL);
+  gimple_asm_set_volatile(asm_or_stmt, true);
+  gsi_insert_after(&i, asm_or_stmt, GSI_NEW_STMT);
+  greturn *gstmt = gimple_build_return(NULL);
+  gsi_insert_after(&i, gstmt, GSI_NEW_STMT);
+
+  tree false_cond;
+  tree true_cond;
+  true_cond = create_artificial_label(UNKNOWN_LOCATION);
+  false_cond = create_artificial_label(UNKNOWN_LOCATION);
+  glabel *gfalse_cond = gimple_build_label(false_cond);
+  glabel *gtrue_cond = gimple_build_label(true_cond);
+  gcond *gcond_stmt = gimple_build_cond(NE_EXPR, (*trvec_args)[0], build_int_cstu(type, 9),
+                                        true_cond, false_cond);
+  i = gsi_start(inner_body);
+  gsi_insert_before(&i, gcond_stmt, GSI_NEW_STMT);
+  gsi_insert_after(&i, gtrue_cond, GSI_NEW_STMT);
+  i = gsi_start(inner_body);
+  int false_leave = 0;
+  while (!gsi_end_p(i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      switch (code)
+      {
+      case GIMPLE_RETURN:
+        gsi_insert_after(&i, gfalse_cond, GSI_NEW_STMT);
+        false_leave = 1;
+        break;
+      default:
+        break;
+      }
+      if (false_leave == 1)
+        break;
+      gsi_next(&i);
+  }
+
+  if (dump_file)
+      fprintf(dump_file, "before gimple_bind_set_body!\n");
+  for (i = gsi_start(inner_body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+  }
+  gimple_bind_set_body(gimplebind, inner_body);
+}
+
+void tricopt_gimple_gen_mat(function *function ATTRIBUTE_UNUSED)
+{
+  tree fdecl;
+  tree args;
+  gimple_stmt_iterator i;
+  gbind *gimplebind;
+  //  greturn *gimpleret;
+  //  tree tr_return;
+  tree type = unsigned_type_node;
+
+  vec<tree, va_gc> *trvec_args = NULL;
+
+  for (fdecl = DECL_ARGUMENTS(current_function_decl);
+       fdecl; fdecl = DECL_CHAIN(fdecl))
+  {
+      args = fdecl;
+      vec_safe_push(trvec_args, args);
+  }
+  gimple_seq body = gimple_body(current_function_decl);
+
+  if (dump_file)
+      fprintf(dump_file, "Initial Sequence mat\n");
+  gimplebind = NULL;
+  //  gimpleret=NULL;
+  for (i = gsi_start(body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      if (code == GIMPLE_BIND)
+      {
+        gimplebind = dyn_cast<gbind *>(stmt);
+      }
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+  }
+  gimple_seq inner_body = gimple_bind_body(gimplebind);
+  for (i = gsi_start(inner_body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+  }
+  greturn *stmt = gimple_build_return(NULL);
+  gsi_insert_before(&i, stmt, GSI_NEW_STMT);
+
+  inner_body = gimple_bind_body(gimplebind);
+  i = gsi_start(inner_body);
+  while (!gsi_end_p(i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      switch (code)
+      {
+      case GIMPLE_RETURN:
+        gsi_next(&i);
+        if (dump_file)
+            fprintf(dump_file, "found return tree with removal!\n");
+        //          tr_return=gimple_return_retval(dyn_cast <greturn *> (stmt));
+        //          gimpleret=dyn_cast <greturn *> (stmt);
+        break;
+      default:
+        if (dump_file)
+            fprintf(dump_file, "remove stmt!\n");
+        if (dump_file)
+            print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+        gsi_next(&i);
+        break;
+      }
+  }
+
+  gimple_seq gse = copy_gimple_seq_and_replace_locals(inner_body);
+  gimple_bind_add_seq(gimplebind, gse);
+
+  tree false_cond;
+  tree true_cond;
+  true_cond = create_artificial_label(UNKNOWN_LOCATION);
+  false_cond = create_artificial_label(UNKNOWN_LOCATION);
+  glabel *gfalse_cond = gimple_build_label(false_cond);
+  glabel *gtrue_cond = gimple_build_label(true_cond);
+  gcond *gcond_stmt = gimple_build_cond(EQ_EXPR, (*trvec_args)[0], build_int_cstu(type, 9),
+                                        true_cond, false_cond);
+  i = gsi_start(inner_body);
+  gsi_insert_before(&i, gcond_stmt, GSI_NEW_STMT);
+  gsi_insert_after(&i, gtrue_cond, GSI_NEW_STMT);
+  i = gsi_start(inner_body);
+  int false_leave = 0;
+  while (!gsi_end_p(i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      switch (code)
+      {
+      case GIMPLE_RETURN:
+        gsi_insert_after(&i, gfalse_cond, GSI_NEW_STMT);
+        false_leave = 1;
+        break;
+      default:
+        break;
+      }
+      if (false_leave == 1)
+        break;
+      gsi_next(&i);
+  }
+
+  if (dump_file)
+      fprintf(dump_file, "before gimple_bind_set_body!\n");
+  for (i = gsi_start(inner_body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+  }
+  gimple_bind_set_body(gimplebind, inner_body);
+}
+
+void tricopt_gimple_gen_mat_ret(function *function ATTRIBUTE_UNUSED)
+{
+  tree fdecl;
+  tree args;
+  gimple_stmt_iterator i;
+  gbind *gimplebind;
+  //  greturn *gimpleret;
+  //  tree tr_return;
+  tree type = unsigned_type_node;
+
+  vec<tree, va_gc> *trvec_args = NULL;
+
+  for (fdecl = DECL_ARGUMENTS(current_function_decl);
+       fdecl; fdecl = DECL_CHAIN(fdecl))
+  {
+      args = fdecl;
+      vec_safe_push(trvec_args, args);
+  }
+  gimple_seq body = gimple_body(current_function_decl);
+
+  if (dump_file)
+      fprintf(dump_file, "Initial Sequence mat_ret\n");
+  gimplebind = NULL;
+  for (i = gsi_start(body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      if (code == GIMPLE_BIND)
+      {
+        gimplebind = dyn_cast<gbind *>(stmt);
+      }
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+  }
+  gimple_seq inner_body = gimple_bind_body(gimplebind);
+  for (i = gsi_start(inner_body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+  }
+
+  inner_body = gimple_bind_body(gimplebind);
+  i = gsi_start(inner_body);
+  while (!gsi_end_p(i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      switch (code)
+      {
+      case GIMPLE_RETURN:
+        gsi_next(&i);
+        if (dump_file)
+            fprintf(dump_file, "found return tree with removal!\n");
+        //          tr_return=gimple_return_retval(dyn_cast <greturn *> (stmt));
+        //          gimpleret=dyn_cast <greturn *> (stmt);
+        break;
+      default:
+        if (dump_file)
+            fprintf(dump_file, "remove stmt!\n");
+        if (dump_file)
+            print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+        gsi_next(&i);
+        break;
+      }
+  }
+
+  gimple_seq gse = copy_gimple_seq_and_replace_locals(inner_body);
+  gimple_bind_add_seq(gimplebind, gse);
+
+  tree false_cond;
+  tree true_cond;
+  true_cond = create_artificial_label(UNKNOWN_LOCATION);
+  false_cond = create_artificial_label(UNKNOWN_LOCATION);
+  glabel *gfalse_cond = gimple_build_label(false_cond);
+  glabel *gtrue_cond = gimple_build_label(true_cond);
+  gcond *gcond_stmt = gimple_build_cond(EQ_EXPR, (*trvec_args)[0], build_int_cstu(type, 9),
+                                        true_cond, false_cond);
+  i = gsi_start(inner_body);
+  gsi_insert_before(&i, gcond_stmt, GSI_NEW_STMT);
+  gsi_insert_after(&i, gtrue_cond, GSI_NEW_STMT);
+  i = gsi_start(inner_body);
+  int false_leave = 0;
+  while (!gsi_end_p(i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      switch (code)
+      {
+      case GIMPLE_RETURN:
+        gsi_insert_after(&i, gfalse_cond, GSI_NEW_STMT);
+        false_leave = 1;
+        break;
+      default:
+        break;
+      }
+      if (false_leave == 1)
+        break;
+      gsi_next(&i);
+  }
+
+  if (dump_file)
+      fprintf(dump_file, "before gimple_bind_set_body!\n");
+  for (i = gsi_start(inner_body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+  }
+  gimple_bind_set_body(gimplebind, inner_body);
+}
+
+void tricopt_gimple_gen_crcu8(function *function ATTRIBUTE_UNUSED)
+{
+  tree fdecl;
+  tree args;
+  gimple_stmt_iterator i;
+  gbind *gimplebind;
+  greturn *gimpleret;
+  tree tr_return = NULL;
+  vec<tree, va_gc> *inputs;
+  vec<tree, va_gc> *outputs;
+  tree input;
+  tree output;
+  tree type = unsigned_type_node;
+
+  vec<tree, va_gc> *trvec_args = NULL;
+
+  for (fdecl = DECL_ARGUMENTS(current_function_decl);
+       fdecl; fdecl = DECL_CHAIN(fdecl))
+  {
+      args = fdecl;
+      vec_safe_push(trvec_args, args);
+  }
+  gimple_seq body = gimple_body(current_function_decl);
+
+  if (dump_file)
+      fprintf(dump_file, "Initial Sequence crcu8\n");
+  gimplebind = NULL;
+  gimpleret = NULL;
+  for (i = gsi_start(body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      if (code == GIMPLE_BIND)
+      {
+        gimplebind = dyn_cast<gbind *>(stmt);
+      }
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+  }
+  gimple_seq inner_body = gimple_bind_body(gimplebind);
+  for (i = gsi_start(inner_body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+  }
+
+  inner_body = gimple_bind_body(gimplebind);
+  i = gsi_start(inner_body);
+  while (!gsi_end_p(i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      enum gimple_code code = gimple_code(stmt);
+      switch (code)
+      {
+      case GIMPLE_RETURN:
+        gsi_next(&i);
+        if (dump_file)
+            fprintf(dump_file, "found return tree with removal!\n");
+        tr_return = gimple_return_retval(dyn_cast<greturn *>(stmt));
+        gimpleret = dyn_cast<greturn *>(stmt);
+        break;
+      default:
+        if (dump_file)
+            fprintf(dump_file, "remove stmt!\n");
+        if (dump_file)
+            print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+        gsi_remove(&i, true); // and delete everything
+        break;
+      }
+  }
+  i = gsi_start(inner_body);
+  tree new_config_ui = build_int_cstu(type, 0x8005f107);
+  tree new_t1 = create_tmp_var_raw(unsigned_type_node);
+  tree new_t2 = create_tmp_var_raw(unsigned_type_node);
+  tree new_config = create_tmp_var_raw(unsigned_type_node);
+  tree new_crc_out = create_tmp_var_raw(short_unsigned_type_node);
+  gassign *assign;
+  gasm *asm_or_stmt;
+  input = build_tree_list(NULL_TREE, build_string(2, "d"));
+  input = chainon(NULL_TREE, build_tree_list(input, (*trvec_args)[1]));
+  output = build_tree_list(NULL_TREE, build_string(3, "=d"));
+  output = chainon(NULL_TREE, build_tree_list(output, new_t1));
+  inputs = NULL;
+  outputs = NULL;
+  vec_safe_push(inputs, input);
+  vec_safe_push(outputs, output);
+  asm_or_stmt = gimple_build_asm_vec("shuffle %0, %1, 0x1F1-0x200 #Number One\n\t", inputs, outputs, NULL, NULL);
+  gimple_asm_set_volatile(asm_or_stmt, false);
+  gsi_insert_before(&i, asm_or_stmt, GSI_NEW_STMT);
+
+  assign = gimple_build_assign(new_config, new_config_ui);
+  gsi_insert_after(&i, assign, GSI_NEW_STMT);
+
+  TREE_TYPE((*trvec_args)[1]) = unsigned_type_node;
+
+  inputs = NULL;
+  input = build_tree_list(NULL_TREE, build_string(2, "d"));
+  input = chainon(NULL_TREE, build_tree_list(input, new_t1));
+  vec_safe_push(inputs, input);
+  input = build_tree_list(NULL_TREE, build_string(2, "d"));
+  input = chainon(NULL_TREE, build_tree_list(input, new_config));
+  vec_safe_push(inputs, input);
+  input = build_tree_list(NULL_TREE, build_string(2, "d"));
+  input = chainon(NULL_TREE, build_tree_list(input, (*trvec_args)[0]));
+  vec_safe_push(inputs, input);
+  output = build_tree_list(NULL_TREE, build_string(3, "=d"));
+  output = chainon(NULL_TREE, build_tree_list(output, new_t2));
+
+  outputs = NULL;
+  vec_safe_push(outputs, output);
+  asm_or_stmt = gimple_build_asm_vec("crcn %0, %1, %2, %3 #Number Two \n\t", inputs, outputs, NULL, NULL);
+  gimple_asm_set_volatile(asm_or_stmt, false);
+  gsi_insert_after(&i, asm_or_stmt, GSI_NEW_STMT);
+
+  input = build_tree_list(NULL_TREE, build_string(2, "d"));
+  input = chainon(NULL_TREE, build_tree_list(input, new_t2));
+  output = build_tree_list(NULL_TREE, build_string(3, "=d"));
+  output = chainon(NULL_TREE, build_tree_list(output, new_crc_out));
+
+  inputs = NULL;
+  outputs = NULL;
+  vec_safe_push(inputs, input);
+  vec_safe_push(outputs, output);
+  asm_or_stmt = gimple_build_asm_vec("shuffle %0, %1, 0x1F1-0x200 #Number Tree\n\t", inputs, outputs, NULL, NULL);
+  gimple_asm_set_volatile(asm_or_stmt, false);
+  gsi_insert_after(&i, asm_or_stmt, GSI_NEW_STMT);
+  assign = gimple_build_assign(tr_return, NOP_EXPR, new_crc_out);
+
+  gimple_return_set_retval(gimpleret, new_crc_out);
+
+  gsi_insert_after(&i, assign, GSI_NEW_STMT);
+  for (i = gsi_start(inner_body); !gsi_end_p(i); gsi_next(&i))
+  {
+      gimple *stmt = gsi_stmt(i);
+      if (dump_file)
+        print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+  }
+  gimple_bind_set_body(gimplebind, inner_body);
+}
+
+typedef struct
+{
+  gimple *gimple_strcmp;
+  basic_block bb_strcmp;
+  gimple_stmt_iterator gsi_strcmp;
+  tree tree_strcmp_param0;
+  tree tree_strcmp_param1;
+  int result;
+} func_strcmp_t;
+
+typedef struct
+{
+  basic_block bb;
+  int nr;       // nr of block
+  int succ_len; // amount of succ
+  int succ;     // succ analyzed so far
+  int total;    // item is fully understood, succ are handled, stop criteria
+  int temp;     // is seen during a temp run, stop criteria
+} bb_vals_t;
+
+#define MEMOPID_UNKNOWN -1
+#define MEMOPID_MEM 1
+#define MEMOPID_IMM 2
+#define MEMOPID_UNVALID 3
+#define MEMOPID_FREEZE 4
+#define MEMOPID_UNVALIDPHI 5
+
+typedef struct
+{
+  int nr;
+  tree lhs;
+  tree rhs1;
+  tree rhs2;
+  tree rhs3;
+  int lhs_op; //-1 unknown, 1 mem, 2 immed, 3 invalidate
+  int lhs_size;
+  int64_t lhs_value;
+  int rhs1_op;
+  int rhs1_size;
+  int64_t rhs1_value;
+  int rhs2_op;
+  int rhs2_size;
+  int64_t rhs2_value;
+  int rhs3_op;
+  int rhs3_size;
+  int rhs3_immed;
+  int64_t rhs3_value;
+
+} mem_assign_t;
+
+#define MEMPID_IMMED 0      // immediate value is known
+#define MEMPID_UNINIT -1    // uninitialized
+#define MEMPID_UNDEFINED -2 // undefined
+#define MEMPID_FROZEN -3    // frozen
+
+typedef struct
+{
+  int stat; // 0 immed, -1 not, -2 undefined, -3 frozen
+  int value;
+} mem_byte_t;
+
+int tricopt_build_bb_chain(function *function, bb_vals_t *bb_vals, vec<int, va_gc> **ids, func_strcmp_t *func_strcmp);
+int tricopt_analyze_bb_chain(function *function, bb_vals_t *bb_vals, vec<int, va_gc> *bb_ids, func_strcmp_t *func_strcmp, int bb_from, int bb_to, mem_byte_t *p0_ref, mem_byte_t *p1_ref);
+int tricopt_analyze_bb_chain_all(function *function, bb_vals_t *bb_vals, vec<int, va_gc> **ids, func_strcmp_t *func_strcmp);
+int tricopt_referenced(tree operand, tree ref);
+int tricopt_mem_access(tree operand, int nr, mem_assign_t *mem);
+static uint32_t tric_singletable_crc32c(uint32_t crc, char *buf, size_t size);
+
+int tricopt_build_bb_chain_recursive(basic_block bb, int *bb_rec_list, int *bb_rec_list_len)
+{
+  // if bb is already do nothing
+  for (int ii = 0; ii < *bb_rec_list_len; ii += 1)
+  {
+      if (bb_rec_list[ii] == bb->index)
+        return 0;
+  }
+  bb_rec_list[*bb_rec_list_len] = bb->index;
+  *bb_rec_list_len += 1;
+  if (*bb_rec_list_len > 2047)
+      return -1;
+  if (bb->preds == NULL)
+      return 0;
+  edge e;
+  edge_iterator ei;
+  FOR_EACH_EDGE(e, ei, bb->preds)
+  {
+      tricopt_build_bb_chain_recursive(e->src, bb_rec_list, bb_rec_list_len);
+  }
+  return 0;
+}
+
+int tricopt_build_bb_chain(function *function, bb_vals_t *bb_vals, vec<int, va_gc> **bb_ids, func_strcmp_t *func_strcmp)
+{
+  vec<uint32_t, va_gc> *bb_ids_cks = NULL;
+  basic_block bb;
+  int bb_len = -1;
+  int cks_hit = 0;
+  FOR_ALL_BB_FN(bb, function)
+  {
+      if (bb->index >= bb_len)
+        bb_len = bb->index + 1;
+  }
+
+  int bb_tmp[2048];
+  int bbcnt;
+  bbcnt = 0;
+  FOR_ALL_BB_FN(bb, function)
+  {
+      if (bb->index == 0)
+      {
+        bbcnt = bb->index;
+        bb_vals[bbcnt].bb = bb;
+        bb_vals[bbcnt].nr = bb->index;
+        bb_vals[bbcnt].succ_len = 1; // has only one succ
+        bb_vals[bbcnt].succ = 0;
+        bb_vals[bbcnt].total = 0;
+        bb_vals[bbcnt].temp = 0;
+        bbcnt += 1;
+      }
+      else if (bb->index == 1)
+      {
+        //	if (dump_file) fprintf(dump_file,"Block Exit %d\n",bb->index);
+        bbcnt = bb->index;
+        bb_vals[bbcnt].bb = bb;
+        bb_vals[bbcnt].nr = bb->index;
+        bb_vals[bbcnt].succ_len = 0; // has no succ
+        bb_vals[bbcnt].succ = 0;
+        bb_vals[bbcnt].total = 0;
+        bb_vals[bbcnt].temp = 0;
+        bbcnt += 1;
+      }
+      else
+      {
+        //	if (dump_file) fprintf(dump_file,"Block %d\n",bb->index);
+        edge e;
+        edge_iterator ei;
+        int cnt = 0;
+        FOR_EACH_EDGE(e, ei, bb->succs)
+        {
+            //  	  basic_block dest = e->dest;
+            //	  if (dump_file) fprintf(dump_file, "bb_succ %d\n", dest->index);
+            cnt += 1;
+        }
+        bbcnt = bb->index;
+        bb_vals[bbcnt].bb = bb;
+        bb_vals[bbcnt].nr = bb->index;
+        bb_vals[bbcnt].succ_len = cnt;
+        bb_vals[bbcnt].succ = 0;
+        bb_vals[bbcnt].total = 0;
+        bb_vals[bbcnt].temp = 0;
+        bbcnt += 1;
+      }
+  }
+
+  for (int kk = 0; kk < bb_len; kk += 1)
+  {
+      if (dump_file)
+        fprintf(dump_file, "(%2d) bb_nr=%2d succ_len=%d succ=%d total=%d temp=%d ", kk, bb_vals[kk].nr, bb_vals[kk].succ_len, bb_vals[kk].succ, bb_vals[kk].total, bb_vals[kk].temp);
+      edge e;
+      edge_iterator ei;
+      if (bb_vals[kk].bb != NULL)
+      {
+        if (dump_file)
+            fprintf(dump_file, " Pred=");
+        FOR_EACH_EDGE(e, ei, bb_vals[kk].bb->preds)
+        {
+            if (dump_file)
+            fprintf(dump_file, " %2d", e->src->index);
+        }
+        if (dump_file)
+            fprintf(dump_file, " Succ=");
+        FOR_EACH_EDGE(e, ei, bb_vals[kk].bb->succs)
+        {
+            if (dump_file)
+            fprintf(dump_file, " %2d", e->dest->index);
+        }
+        if (dump_file)
+            fprintf(dump_file, "\n");
+      }
+      else
+      {
+        if (dump_file)
+            fprintf(dump_file, "\n");
+      }
+  }
+
+  // do a recursive print of all potential pred from the bb which has to be omptimized
+  // stop condition is no pred, or is already in list, do it recursive
+  int build_bb_chain_recursive_ok = -1;
+  int bb_rec_list[2048];
+  int bb_rec_list_len;
+  bb_rec_list_len = 0;
+  build_bb_chain_recursive_ok = tricopt_build_bb_chain_recursive(func_strcmp->bb_strcmp, &bb_rec_list[0], &bb_rec_list_len);
+  if (build_bb_chain_recursive_ok != 0)
+      return -1;
+  for (int ii = 0; ii < bb_rec_list_len; ii += 1)
+  {
+      if (dump_file)
+        fprintf(dump_file, "Rec %2d %d\n", bb_rec_list[ii], bb_vals[bb_rec_list[ii]].succ_len);
+  }
+  // each bb which is not in this list, should not be touched, therefore set succ_len to zero
+  for (int kk = 0; kk < bb_len; kk += 1)
+  {
+      int inlist = 0;
+      for (int ii = 0; ii < bb_rec_list_len; ii += 1)
+      {
+        if (bb_rec_list[ii] == bb_vals[kk].nr)
+        {
+            inlist = 1;
+            break;
+        }
+      }
+      if (inlist == 0)
+        bb_vals[kk].succ_len = 0;
+  }
+
+  int incr = 0;
+  int incr_max = 1;
+  for (int kk = 0; kk < bb_len; kk += 1)
+  {
+      if (bb_vals[kk].succ_len != 0)
+      {
+        incr_max = incr_max * bb_vals[kk].succ_len;
+      }
+  }
+  // the optimization problem is to complex
+  // other approach would be to continue singled pred, see anchor pass
+  if (incr_max > 16384)
+      return -1;
+
+  if (dump_file)
+      fprintf(dump_file, "maximum combinations %d \n", incr_max);
+  while (incr < incr_max)
+  {
+      // increment by one
+
+      int tmp = incr;
+      for (int kk = 0; kk < bb_len; kk += 1)
+      {
+        if (bb_vals[kk].succ_len != 0)
+        {
+            bb_vals[kk].succ = tmp % bb_vals[kk].succ_len;
+            tmp = tmp / bb_vals[kk].succ_len;
+        }
+      }
+      //      if (dump_file) fprintf(dump_file, "%d= ",incr);
+      //      for (int kk=0; kk<bb_len; kk+=1)
+      //	{
+      //	  if (dump_file) fprintf(dump_file, "[%d] (%d,%d) ",kk,bb_vals[kk].succ,bb_vals[kk].succ_len);
+      //	}
+      //      if (dump_file) fprintf(dump_file, "\n");
+      for (int kk = 0; kk < bb_len; kk += 1)
+      {
+        bb_vals[kk].temp = 0; // set the bb visited to 0
+      }
+
+      // now analyze it
+      int bb_act = 0;
+      int id_bb_tmp = 0;
+      while (1 == 1)
+      {
+        //      if (dump_file) fprintf(dump_file, "investigate bb old %d new %d\n",bb_pred, bb_act);
+        if (bb_vals[bb_act].nr == 1)
+        {
+            bb_tmp[id_bb_tmp++] = bb_act;
+            bb_tmp[id_bb_tmp++] = -1;
+            break;
+        } // reached return bb
+        if (bb_vals[bb_act].succ_len == 0)
+        { /*bb_tmp[id_bb_tmp++]=bb_act;*/
+            bb_tmp[id_bb_tmp++] = -3;
+            break;
+        } // no successor
+        if (bb_vals[bb_act].temp == 1)
+        {
+            bb_tmp[id_bb_tmp++] = bb_act;
+            bb_tmp[id_bb_tmp++] = -3;
+            break;
+        } // was already visited
+        if (bb_vals[bb_act].succ == bb_vals[bb_act].succ_len)
+        {
+            bb_tmp[id_bb_tmp++] = bb_act;
+            bb_tmp[id_bb_tmp++] = -4;
+            break;
+        } // all successors already taken,is a fail
+        bb_tmp[id_bb_tmp++] = bb_act;
+        bb_vals[bb_act].temp += 1;
+        //      if (bb_pred!=-1) //not the start
+        {
+
+            edge e;
+            edge_iterator ei;
+            int cnt = 0;
+            FOR_EACH_EDGE(e, ei, bb_vals[bb_act].bb->succs)
+            {
+            if (cnt == bb_vals[bb_act].succ)
+            {
+      bb_act = e->dest->index;
+      //		if (dump_file) fprintf(dump_file, "take bb old %d new %d\n",bb_pred, bb_act);
+      break;
+            }
+            cnt += 1;
+            }
+        }
+      }
+      // check if the chain contains the func
+      int bb_ok = 0;
+      for (int ii = 0; ii < id_bb_tmp; ii += 1)
+      {
+        if (bb_vals[bb_tmp[ii]].nr == func_strcmp->bb_strcmp->index)
+        {
+            bb_ok = 1;
+            break;
+        }
+      }
+
+      if (bb_ok == 1)
+      {
+        // in case of -3 abort, check if the func is part of the repetition
+        // if yes, then take the complete chain
+        // if no only convert it in a -1 chain and shorten it
+        if (bb_tmp[id_bb_tmp - 1] == -3)
+        {
+            int bb_rep0_id = -1;
+            int bb_rep1_id = -1;
+            int bb_func_id = -1;
+            for (int ii = 0; ii < id_bb_tmp; ii += 1)
+            {
+            if (bb_rep0_id == -1)
+      if (bb_tmp[id_bb_tmp - 2] == bb_tmp[ii])
+              bb_rep0_id = ii;
+            if (bb_rep0_id != -1)
+      if (bb_tmp[id_bb_tmp - 2] == bb_tmp[ii])
+              bb_rep1_id = ii;
+            if (bb_func_id == -1)
+      if (bb_vals[bb_tmp[ii]].nr == func_strcmp->bb_strcmp->index)
+              bb_func_id = ii;
+            }
+            // see now if the func is not in between
+            if (!((bb_func_id > bb_rep0_id) && (bb_func_id < bb_rep1_id)))
+            {
+            bb_tmp[bb_func_id + 1] = -1;
+            id_bb_tmp = bb_func_id + 2;
+            }
+        }
+        uint32_t cks = tric_singletable_crc32c(0xaaaabbbb, (char *)&bb_tmp[0], id_bb_tmp * (sizeof(int)));
+        // check if cks is already known
+        int cks_known = 0;
+        for (unsigned int kk = 0; kk < vec_safe_length(bb_ids_cks); kk += 1)
+        {
+            if ((*bb_ids_cks)[kk] == cks)
+            {
+            cks_known = 1;
+            cks_hit += 1;
+            break;
+            }
+        }
+        if (cks_known == 0)
+        {
+            vec_safe_push(bb_ids_cks, cks);
+            for (int kk = 0; kk < id_bb_tmp; kk += 1)
+            {
+            vec_safe_push(*bb_ids, bb_tmp[kk]);
+            //  	 if (dump_file) fprintf(dump_file,"Push %d %d \n",bb_tmp[kk],vec_safe_length(*bb_ids));
+            }
+        }
+      }
+      incr += 1;
+  }
+  // have all bb chains without redundance
+  // depending on exit we have to the analysis
+  // if exit -3, then goto second bb_strcmp, jump backward
+  // if exit -1, then goto first bb_strcmp
+  return 0;
+}
+
+/* the function delivers fail, if the called function can modify the local parameter
+ * this can be, if the function passes arguments, which are somehow refering direct/indirect to the strcmp values
+ * if it is void as argument not relevant
+ * for dhrysone it is print, __builtin_puts
+ */
+int tricopt_analyze_call(gimple *stmt)
+{
+  gcall *gimplecall = dyn_cast<gcall *>(stmt);
+  tree fn_decl = gimple_call_fndecl(gimplecall);
+  if (gimple_call_num_args(gimplecall) == 0)
+      return 0; // not relevant
+  if (strcmp("printf", print_generic_expr_to_str(fn_decl)) == 0)
+      return 0; // not relevant
+  if (strcmp("__builtin_putchar", print_generic_expr_to_str(fn_decl)) == 0)
+      return 0; // not relevant
+  if (strcmp("__builtin_puts", print_generic_expr_to_str(fn_decl)) == 0)
+      return 0; // not relevant
+
+  if (strcmp("strcmp", print_generic_expr_to_str(fn_decl)) != 0)
+  {
+      goto dont_take;
+  }
+  if ((gimple_call_num_args(gimplecall) != 2))
+  {
+      goto dont_take;
+  }
+  tree c1arg1;
+  tree c1arg2;
+  tree clhs;
+
+  c1arg1 = gimple_call_arg(gimplecall, 0);
+  if (get_attr_nonstring_decl(c1arg1))
+  {
+      goto dont_take;
+  }
+  clhs = gimple_call_lhs(gimplecall);
+  //  if (dump_file) fprintf(dump_file,"clhs %s\n",print_generic_expr_to_str(clhs));
+  //  if (dump_file) fprintf(dump_file,"clhs Treecode %s\n",get_tree_code_name (TREE_CODE(clhs))); //addr_expr
+  //  if (dump_file) fprintf(dump_file,"clhs Type Treecode %s\n",print_generic_expr_to_str (TREE_TYPE(clhs))); //addr_expr
+  if (strcmp("int", print_generic_expr_to_str(TREE_TYPE(clhs))) != 0)
+  {
+      goto dont_take;
+  }
+  //  if (dump_file) fprintf(dump_file,"c1arg1 %s\n",print_generic_expr_to_str(c1arg1));
+  //  if (dump_file) fprintf(dump_file,"c1arg1 Treecode %s\n",get_tree_code_name (TREE_CODE(c1arg1))); //addr_expr
+  if (TREE_CODE(c1arg1) != ADDR_EXPR)
+  {
+      goto dont_take;
+  }
+  //  if (dump_file) fprintf(dump_file,"c1arg1 Type Treecode %s\n",print_generic_expr_to_str (TREE_TYPE(c1arg1 ))); //addr_expr
+  //  if (dump_file) fprintf(dump_file,"c1arg1 op0 Treecode %s\n",print_generic_expr_to_str (TREE_OPERAND (c1arg1, 0))); //addr_expr
+  if (strcmp("char[31] *", print_generic_expr_to_str(TREE_TYPE(c1arg1))) != 0)
+  {
+      goto dont_take;
+  }
+  c1arg2 = gimple_call_arg(gimplecall, 1);
+  if (get_attr_nonstring_decl(c1arg2))
+  {
+      goto dont_take;
+  }
+  //  if (dump_file) fprintf(dump_file,"c1arg2 %s\n",print_generic_expr_to_str(c1arg2));
+  //  if (dump_file) fprintf(dump_file,"c1arg2 Treecode %s\n",get_tree_code_name (TREE_CODE(c1arg2))); //addr_expr
+  if (TREE_CODE(c1arg2) != ADDR_EXPR)
+  {
+      goto dont_take;
+  }
+  //  if (dump_file) fprintf(dump_file,"c1arg2 Type Treecode %s\n",print_generic_expr_to_str (TREE_TYPE(c1arg2 ))); //addr_expr
+  //  if (dump_file) fprintf(dump_file,"c1arg2 op0 Treecode %s\n",print_generic_expr_to_str (TREE_OPERAND (c1arg2, 0))); //addr_expr
+  if (strcmp("char[31] *", print_generic_expr_to_str(TREE_TYPE(c1arg2))) != 0)
+  {
+      goto dont_take;
+  }
+  return 0;
+dont_take:;
+  if (dump_file)
+      fprintf(dump_file, "Call Invalidates all relevant store motion recording %s \n", print_generic_expr_to_str(fn_decl));
+  return 1;
+}
+
+// analyze bb_chain with related to information in func_strcmp
+
+int tricopt_analyze_bb_chain(function *function ATTRIBUTE_UNUSED, bb_vals_t *bb_vals, vec<int, va_gc> *bb_ids, func_strcmp_t *func_strcmp, int bb_from, int bb_to, mem_byte_t *p0_ref, mem_byte_t *p1_ref)
+{
+  vec<tree, va_gc> *func_ref = NULL;
+  vec<mem_assign_t, va_gc> *mem_access = NULL;
+  vec_safe_push(func_ref, func_strcmp->tree_strcmp_param0);
+  vec_safe_push(func_ref, func_strcmp->tree_strcmp_param1);
+
+  // walk till bb_to
+
+  for (unsigned int kk = bb_from; kk <= (unsigned int)bb_to; kk += 1)
+  {
+      if ((*bb_ids)[kk] >= 0)
+      {
+        // check the phi
+        // if a phi of the relevant edge references a parameter, declare it is an unvalid
+        gphi_iterator pi = gsi_start_phis(bb_vals[(*bb_ids)[kk]].bb);
+        for (; !gsi_end_p(pi); gsi_next(&pi))
+        {
+            gphi *phi = pi.phi();
+            if (!virtual_operand_p(gimple_phi_result(phi)))
+            {
+
+            if (dump_file)
+      print_gimple_stmt(dump_file, phi, 0, dump_flag::TDF_NONE);
+            for (unsigned int ii = 0; ii < gimple_phi_num_args(phi); ++ii)
+            {
+      basic_block src = gimple_phi_arg_edge(phi, ii)->src;
+      if (src->index == bb_vals[(*bb_ids)[kk - 1]].nr)
+      {
+              tree rhs = gimple_phi_arg_def(phi, ii);
+              tree lhs = gimple_phi_result(phi);
+              if (dump_file)
+                fprintf(dump_file, "%d %s(%d)=(%d) \n", ii, print_generic_expr_to_str(rhs), src->index, bb_vals[(*bb_ids)[kk - 1]].nr);
+              int ref = 0;
+              for (unsigned int jj = 0; jj < vec_safe_length(func_ref); jj += 1)
+              {
+                ref |= tricopt_referenced(lhs, (*func_ref)[jj]);
+                ref |= tricopt_referenced(rhs, (*func_ref)[jj]);
+              }
+              if (ref != 0)
+              {
+                if (dump_file)
+                  fprintf(dump_file, "Phi references func_ref param\n");
+                mem_assign_t mem;
+                memset(&mem, 0, sizeof(mem_assign_t));
+                mem.nr = bb_vals[(*bb_ids)[kk]].bb->index;
+                mem.lhs = NULL;
+                mem.lhs_op = MEMOPID_UNVALIDPHI; // unvalidate it, is part of phi
+                mem.lhs_size = 0;
+                mem.lhs_value = 0;
+                mem.rhs1_op = -1;
+                mem.rhs2_op = -1;
+                mem.rhs3_op = -1;
+                vec_safe_push(mem_access, mem);
+              }
+      }
+            }
+            }
+        }
+
+        gimple_stmt_iterator gsi = gsi_start_bb(bb_vals[(*bb_ids)[kk]].bb);
+        gimple *stmt = NULL;
+        for (; !gsi_end_p(gsi); gsi_next(&gsi))
+        {
+            stmt = gsi_stmt(gsi);
+            enum gimple_code code = gimple_code(stmt);
+            if (gimple_has_mem_ops(stmt))
+            {
+            if (dump_file)
+      fprintf(dump_file, "gimple_has_mem_ops\n");
+            if (code == GIMPLE_CALL)
+            {
+      // gimple calls are invalidating the sequence so far recored
+      // exception if call known and does not modify the items which are interesting
+      if (dump_file)
+              print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+      if (stmt == func_strcmp->gimple_strcmp)
+      {
+              mem_assign_t mem;
+              memset(&mem, 0, sizeof(mem_assign_t));
+              mem.nr = bb_vals[(*bb_ids)[kk]].bb->index;
+              mem.lhs = NULL;
+              mem.lhs_op = MEMOPID_FREEZE; // freeze it
+              mem.lhs_size = 0;
+              mem.lhs_value = 0;
+              mem.rhs1_op = -1;
+              mem.rhs2_op = -1;
+              mem.rhs3_op = -1;
+              vec_safe_push(mem_access, mem);
+      }
+      else
+      {
+              // here we decide if the call statement makes the so far recorded values unvalid
+              // please see tricopt_analyze_call
+              if (tricopt_analyze_call(stmt) != 0)
+              {
+                mem_assign_t mem;
+                memset(&mem, 0, sizeof(mem_assign_t));
+                mem.nr = bb_vals[(*bb_ids)[kk]].bb->index;
+                mem.lhs = NULL;
+                mem.lhs_op = MEMOPID_UNVALID; // unvalidate it
+                mem.lhs_size = 0;
+                mem.lhs_value = 0;
+                mem.rhs1_op = -1;
+                mem.rhs2_op = -1;
+                mem.rhs3_op = -1;
+                vec_safe_push(mem_access, mem);
+              }
+      }
+            }
+            if (code == GIMPLE_ASSIGN)
+            {
+      gassign *gimpleassign = dyn_cast<gassign *>(stmt);
+      if (dump_file)
+              print_gimple_stmt(dump_file, stmt, 0, TDF_RAW);
+      if (gimple_assign_rhs_code(gimpleassign) != CONSTRUCTOR)
+      {
+              mem_assign_t mem;
+              int ref = 0;
+              memset(&mem, 0, sizeof(mem_assign_t));
+              mem.nr = bb_vals[(*bb_ids)[kk]].bb->index;
+              tree lhs = NULL;
+              tree rhs1 = NULL;
+              tree rhs2 = NULL;
+              tree rhs3 = NULL;
+              lhs = gimple_assign_lhs(gimpleassign);
+              for (unsigned int jj = 0; jj < vec_safe_length(func_ref); jj += 1)
+              {
+                ref |= tricopt_referenced(lhs, (*func_ref)[jj]);
+              }
+              tricopt_mem_access(lhs, 0, &mem);
+              switch (gimple_num_ops(gimpleassign))
+              {
+              case 4:
+                rhs3 = gimple_assign_rhs3(gimpleassign);
+                for (unsigned int jj = 0; jj < vec_safe_length(func_ref); jj += 1)
+                {
+                  ref |= tricopt_referenced(rhs3, (*func_ref)[jj]);
+                }
+
+                tricopt_mem_access(rhs3, 3, &mem);
+                /* FALLTHRU */
+              case 3:
+                rhs2 = gimple_assign_rhs2(gimpleassign);
+                for (unsigned int jj = 0; jj < vec_safe_length(func_ref); jj += 1)
+                {
+                  ref |= tricopt_referenced(rhs2, (*func_ref)[jj]);
+                }
+
+                tricopt_mem_access(rhs2, 2, &mem);
+                /* FALLTHRU */
+              case 2:
+                rhs1 = gimple_assign_rhs1(gimpleassign);
+                for (unsigned int jj = 0; jj < vec_safe_length(func_ref); jj += 1)
+                {
+                  ref |= tricopt_referenced(rhs1, (*func_ref)[jj]);
+                }
+
+                tricopt_mem_access(rhs1, 1, &mem);
+                break;
+              default:
+                gcc_unreachable();
+              }
+              // push things where the param is referenced
+              if (ref != 0)
+              {
+                vec_safe_push(mem_access, mem);
+              }
+      }
+      // investigate if lhs,rhs are containing memory reads / writes
+            }
+            }
+
+            // if if at the end and stmt is  the function call
+            // please have here in mind the function call can also exist one time in an earlier bb
+            if (kk == (unsigned int)bb_to)
+            {
+            // reached the func
+            if (stmt == func_strcmp->gimple_strcmp)
+            {
+      break;
+            }
+            }
+        }
+      }
+  }
+
+  for (unsigned int kk = 0; kk < vec_safe_length(mem_access); kk += 1)
+  {
+      mem_assign_t mem;
+      mem = (*mem_access)[kk];
+      if (dump_file)
+      {
+        fprintf(dump_file, "*%2d bb=%2d mem lhs #%10s# op=%2d sz=%d val=%10ld ", kk, mem.nr, print_generic_expr_to_str(mem.lhs), mem.lhs_op, mem.lhs_size, mem.lhs_value);
+        if (mem.rhs1 != NULL)
+        {
+            fprintf(dump_file, "rhs1 #%10s# op=%2d sz=%d val=%10ld ", print_generic_expr_to_str(mem.rhs1), mem.rhs1_op, mem.rhs1_size, mem.rhs1_value);
+        }
+        if (mem.rhs2 != NULL)
+        {
+            fprintf(dump_file, "rhs2 #%10s# op=%2d sz=%d val=%10ld ", print_generic_expr_to_str(mem.rhs2), mem.rhs2_op, mem.rhs2_size, mem.rhs2_value);
+        }
+        if (mem.rhs3 != NULL)
+        {
+            fprintf(dump_file, "rhs3 #%10s# op=%2d sz=%d val=%10ld ", print_generic_expr_to_str(mem.rhs3), mem.rhs3_op, mem.rhs3_size, mem.rhs3_value);
+        }
+        fprintf(dump_file, "\n");
+      }
+  }
+
+  // analysis if both parameters can be represented by known immediates
+  // the size of both arrays is 31
+  mem_byte_t p0[31]; // stat 0 immed, -1 not, -2 undefined, -3 frozen
+  mem_byte_t p1[31];
+
+  for (int ii = 0; ii < 31; ii += 1)
+  {
+      p0[ii].stat = MEMPID_UNINIT;
+      p1[ii].stat = MEMPID_UNINIT;
+      p0[ii].value = 0;
+      p1[ii].value = 0;
+  }
+
+  for (unsigned int kk = 0; kk < vec_safe_length(mem_access); kk += 1)
+  {
+      mem_assign_t mem;
+      int mem_idx;
+      mem = (*mem_access)[kk];
+      if (dump_file)
+      {
+        fprintf(dump_file, "%2d bb=%2d mem lhs #%10s# op=%2d sz=%d val=%10ld \n", kk, mem.nr, print_generic_expr_to_str(mem.lhs), mem.lhs_op, mem.lhs_size, mem.lhs_value);
+      }
+      // 1st case lhs is mem and rhs1 is immediate
+      if ((mem.lhs_op == MEMOPID_MEM) && (mem.rhs1_op == MEMOPID_IMM))
+      {
+        mem_idx = mem.lhs_value;
+        for (unsigned int ll = 0; ll < (unsigned int)mem.lhs_size; ll += 1)
+        {
+            if (mem.lhs == (*func_ref)[0])
+            {
+            int mem_val;
+            mem_val = (mem.rhs1_value >> (ll * 8) & 0xFF);
+            if (p0[mem_idx + ll].stat == MEMPID_FROZEN)
+            {
+      // frozen
+      if (mem_val != p0[mem_idx + ll].value)
+              p0[mem_idx + ll].stat = MEMPID_UNDEFINED;
+            }
+            else
+            {
+      p0[mem_idx + ll].stat = MEMPID_IMMED;
+      p0[mem_idx + ll].value = mem_val;
+            }
+            }
+            if (mem.lhs == (*func_ref)[1])
+            {
+            int mem_val;
+            mem_val = (mem.rhs1_value >> (ll * 8) & 0xFF);
+            if (p1[mem_idx + ll].stat == MEMPID_FROZEN)
+            {
+      // frozen
+      if (mem_val != p1[mem_idx + ll].value)
+              p1[mem_idx + ll].stat = MEMPID_UNDEFINED;
+            }
+            else
+            {
+      p1[mem_idx + ll].stat = MEMPID_IMMED;
+      p1[mem_idx + ll].value = mem_val;
+            }
+            }
+        }
+      }
+      // 2nd case lhs is mem and rhs1 is not immediate/unknown
+      if ((mem.lhs_op == MEMOPID_MEM) && (mem.rhs1_op == MEMOPID_UNKNOWN))
+      {
+        mem_idx = mem.lhs_value;
+        for (unsigned int ll = 0; ll < (unsigned int)mem.lhs_size; ll += 1)
+        {
+            if (mem.lhs == (*func_ref)[0])
+            p0[mem_idx + ll].stat = MEMPID_UNDEFINED;
+
+            if (mem.lhs == (*func_ref)[1])
+            p1[mem_idx + ll].stat = MEMPID_UNDEFINED;
+        }
+      }
+      // unvalidate all, call can modify it, if not known
+      if (mem.lhs_op == MEMOPID_UNVALID)
+      {
+        for (unsigned int ll = 0; ll < 31; ll += 1)
+        {
+            p0[ll].stat = MEMPID_UNINIT;
+            p1[ll].stat = MEMPID_UNINIT;
+        }
+      }
+      // unvalidate all, param of func is somehow part of phi statement
+      if (mem.lhs_op == MEMOPID_UNVALIDPHI)
+      {
+        if (dump_file)
+            fprintf(dump_file, "Unvalid phi operation\n");
+        return -1; // unvalid immediate
+        for (unsigned int ll = 0; ll < 31; ll += 1)
+        {
+            p0[ll].stat = MEMPID_UNINIT;
+            p1[ll].stat = MEMPID_UNINIT;
+        }
+      }
+      if (mem.lhs_op == MEMOPID_UNKNOWN)
+      {
+        if (dump_file)
+            fprintf(dump_file, "Unvalid mem unknown\n");
+        return -1; // unvalid immediate
+        //	  for (unsigned int ll=0; ll<31; ll+=1)
+        //	    {
+        //	      p0[ll].stat=MEMPID_UNINIT;
+        //	      p1[ll].stat=MEMPID_UNINIT;
+        //	    }
+      }
+      // freeze the values
+      if (mem.lhs_op == MEMOPID_FREEZE)
+      {
+        for (unsigned int ll = 0; ll < 31; ll += 1)
+        {
+            if (p0[ll].stat == MEMPID_IMMED)
+            p0[ll].stat = MEMPID_FROZEN;
+            if (p1[ll].stat == MEMPID_IMMED)
+            p1[ll].stat = MEMPID_FROZEN;
+        }
+      }
+  }
+
+  if (p0_ref[0].stat == MEMPID_UNINIT)
+  {
+      // first time, no ref is existing
+      for (int ii = 0; ii < 31; ii += 1)
+      {
+        p0_ref[ii] = p0[ii];
+        p1_ref[ii] = p1[ii];
+      }
+      if (dump_file)
+        fprintf(dump_file, "End of chain reached, first reference captured\n");
+  }
+  if (dump_file)
+  {
+      if (dump_file)
+        fprintf(dump_file, "Byte           ");
+      for (int ii = 0; ii < 31; ii += 1)
+      {
+        if (dump_file)
+            fprintf(dump_file, "%3d ", ii);
+      }
+      if (dump_file)
+        fprintf(dump_file, "\n");
+
+      if (dump_file)
+        fprintf(dump_file, "Param Status 0 ");
+      for (int ii = 0; ii < 31; ii += 1)
+      {
+        if (dump_file)
+            fprintf(dump_file, "%3d ", p0[ii].stat);
+      }
+      if (dump_file)
+        fprintf(dump_file, "\n");
+      if (dump_file)
+        fprintf(dump_file, "Param Value  0 ");
+      for (int ii = 0; ii < 31; ii += 1)
+      {
+        if (dump_file)
+            fprintf(dump_file, "%3d ", p0[ii].value);
+      }
+      if (dump_file)
+        fprintf(dump_file, "\n");
+      if (dump_file)
+        fprintf(dump_file, "Param Status 1 ");
+      for (int ii = 0; ii < 31; ii += 1)
+      {
+        if (dump_file)
+            fprintf(dump_file, "%3d ", p1[ii].stat);
+      }
+      if (dump_file)
+        fprintf(dump_file, "\n");
+      if (dump_file)
+        fprintf(dump_file, "Param Value  1 ");
+      for (int ii = 0; ii < 31; ii += 1)
+      {
+        if (dump_file)
+            fprintf(dump_file, "%3d ", p1[ii].value);
+      }
+      if (dump_file)
+        fprintf(dump_file, "\n");
+
+      if (dump_file)
+        fprintf(dump_file, "Paref Status 0 ");
+      for (int ii = 0; ii < 31; ii += 1)
+      {
+        if (dump_file)
+            fprintf(dump_file, "%3d ", p0_ref[ii].stat);
+      }
+      if (dump_file)
+        fprintf(dump_file, "\n");
+      if (dump_file)
+        fprintf(dump_file, "Paref Value  0 ");
+      for (int ii = 0; ii < 31; ii += 1)
+      {
+        if (dump_file)
+            fprintf(dump_file, "%3d ", p0_ref[ii].value);
+      }
+      if (dump_file)
+        fprintf(dump_file, "\n");
+      if (dump_file)
+        fprintf(dump_file, "Paref Status 1 ");
+      for (int ii = 0; ii < 31; ii += 1)
+      {
+        if (dump_file)
+            fprintf(dump_file, "%3d ", p1_ref[ii].stat);
+      }
+      if (dump_file)
+        fprintf(dump_file, "\n");
+      if (dump_file)
+        fprintf(dump_file, "Paref Value  1 ");
+      for (int ii = 0; ii < 31; ii += 1)
+      {
+        if (dump_file)
+            fprintf(dump_file, "%3d ", p1_ref[ii].value);
+      }
+      if (dump_file)
+        fprintf(dump_file, "\n");
+  }
+  // it is mandatory that all values are in a frozen state
+  for (int ii = 0; ii < 31; ii += 1)
+  {
+      if (p0[ii].stat != MEMPID_FROZEN)
+      {
+        if (dump_file)
+            fprintf(dump_file, "End of chain reached unvalid p0\n");
+        return -1; // unvalid immediate
+      }
+      if (p1[ii].stat != MEMPID_FROZEN)
+      {
+        if (dump_file)
+            fprintf(dump_file, "End of chain reached unvalid p1\n");
+        return -1; // unvalid immediate
+      }
+  }
+  // it is mandatory that all parameters, which are captured are identical
+  for (int ii = 0; ii < 31; ii += 1)
+  {
+      if (p0[ii].value != p0_ref[ii].value)
+      {
+        if (dump_file)
+            fprintf(dump_file, "End of chain reached, different immediate in p0[%d]=%d and p0_ref[%d]=%d \n", ii, p0[ii].value, ii, p0_ref[ii].value);
+        return -1; // unvalid immediate
+      }
+      if (p1[ii].value != p1_ref[ii].value)
+      {
+        if (dump_file)
+            fprintf(dump_file, "End of chain reached, different immediate in p1[%d]=%d and p1_ref[%d]=%d \n", ii, p1[ii].value, ii, p1_ref[ii].value);
+        return -1; // unvalid immediate
+      }
+  }
+  if (dump_file)
+      fprintf(dump_file, "End of chain reached, everything ok\n");
+  return 0;
+}
+
+int tricopt_analyze_bb_chain_all(function *function, bb_vals_t *bb_vals, vec<int, va_gc> *bb_ids, func_strcmp_t *func_strcmp)
+{
+  int bb_from;
+  int bb_to;
+  int bb_chain_kind;
+  int bb_chain_func;
+  int analyze_bb_chain_ok = -1;
+  mem_byte_t p0_ref[31]; // stat 0 immed, -1 not, -2 undefined, -3 frozen
+  mem_byte_t p1_ref[31];
+
+  for (int ii = 0; ii < 31; ii += 1)
+  {
+      p0_ref[ii].stat = -1;
+      p1_ref[ii].stat = -1;
+      p0_ref[ii].value = 0;
+      p1_ref[ii].value = 0;
+  }
+
+  // derive now the chains which are mandatory to be analyzed
+  // do not take if func_strcmp->bb_strcmp is not in
+  // take if in (two times) and stop before -3 delimter
+  // take if in (one times) and stop is delimter -1
+
+  for (unsigned int kk = 0; kk < vec_safe_length(bb_ids); kk += 1)
+  {
+      bb_from = -1;
+      bb_to = -1;
+      bb_chain_kind = 0;
+      bb_chain_func = -1;
+      unsigned int jj;
+      if ((*bb_ids)[kk] >= 0)
+      {
+        for (jj = kk; jj < vec_safe_length(bb_ids); jj += 1)
+        {
+            if (bb_vals[(*bb_ids)[jj]].nr == func_strcmp->bb_strcmp->index)
+            bb_chain_func = jj;
+            if ((*bb_ids)[jj] == -1)
+            {
+            bb_from = kk;
+            bb_chain_kind = -1;
+            break;
+            }
+            if ((*bb_ids)[jj] == -3)
+            {
+            bb_from = kk;
+            bb_chain_kind = -3;
+            break;
+            }
+            if ((*bb_ids)[jj] == -2)
+            {
+            bb_from = kk;
+            bb_chain_kind = -2;
+            break;
+            }
+        }
+        kk = jj;
+        if (bb_chain_kind == -2)
+        {
+            // a chain ending with -2 should not happen
+            if (dump_file)
+            fprintf(dump_file, "Chain status %d, Chain ends with -2!!! \n", -1);
+            return -1;
+        }
+        if (bb_chain_func == -1)
+        {
+            // no func inside should not happen
+            return -1;
+        }
+        if ((bb_chain_kind != -1) && (bb_chain_kind != -3))
+        {
+            // end of chain must be -1 or -3, -1 is single path, -3 dual path
+        }
+        bb_to = jj - 1;
+
+        if (dump_file)
+            fprintf(dump_file, "Chain to analyze kind=%d from=(%d)%d to=(%d)%d func=(%d)%d \n",
+                    bb_chain_kind, bb_from, bb_vals[(*bb_ids)[bb_from]].nr, bb_to, bb_vals[(*bb_ids)[bb_to]].nr, bb_chain_func, bb_vals[(*bb_ids)[bb_chain_func]].nr);
+        analyze_bb_chain_ok = tricopt_analyze_bb_chain(function, bb_vals, bb_ids, func_strcmp, bb_from, bb_to, &p0_ref[0], &p1_ref[0]);
+        if (dump_file)
+            fprintf(dump_file, "Chain status %d \n", analyze_bb_chain_ok);
+        if (analyze_bb_chain_ok != 0)
+            return -1;
+      }
+  }
+
+  // compute the result
+  char p0_char[31];
+  char p1_char[31];
+  int p0_zero = -1;
+  int p1_zero = -1;
+  for (int ii = 0; ii < 31; ii += 1)
+  {
+      p0_char[ii] = p0_ref[ii].value;
+      p1_char[ii] = p1_ref[ii].value;
+      if (p0_char[ii] == 0)
+        p0_zero = 1;
+      if (p1_char[ii] == 0)
+        p1_zero = 1;
+  }
+  if ((p0_zero == -1) || (p1_zero == -1))
+  {
+      if (dump_file)
+        fprintf(dump_file, "p0 or p1 does not contain a zero delimiter %d %d \n", p0_zero, p1_zero);
+      return -1;
+  }
+  func_strcmp->result = strcmp(&p0_char[0], &p1_char[0]);
+  if (func_strcmp->result < 0)
+      func_strcmp->result = -1;
+  if (func_strcmp->result > 0)
+      func_strcmp->result = 1;
+  if (dump_file)
+      fprintf(dump_file, "Chain status strcmp %d result=%d\n", analyze_bb_chain_ok, func_strcmp->result);
+  return analyze_bb_chain_ok;
+}
+
+int tricopt_referenced(tree operand, tree ref)
+{
+  int len;
+  if (operand == NULL)
+      return -1;
+  if (operand == ref)
+      return 1;
+  len = TREE_OPERAND_LENGTH(operand);
+  for (int i = 0; i < len; ++i)
+  {
+      if (tricopt_referenced(TREE_OPERAND(operand, i), ref) == 1)
+        return 1;
+  }
+  return 0;
+}
+
+int tricopt_mem_access(tree operand, int nr, mem_assign_t *mem)
+{
+  if (operand == NULL)
+  {
+      switch (nr)
+      {
+      case 0:
+        mem->lhs = NULL;
+        mem->lhs_op = MEMOPID_UNKNOWN;
+        mem->lhs_size = 0;
+        mem->lhs_value = 0;
+        break;
+      case 1:
+        mem->rhs1 = NULL;
+        mem->rhs1_op = MEMOPID_UNKNOWN;
+        mem->rhs1_size = 0;
+        mem->rhs1_value = 0;
+        break;
+      case 2:
+        mem->rhs2 = NULL;
+        mem->rhs2_op = MEMOPID_UNKNOWN;
+        mem->rhs2_size = 0;
+        mem->rhs2_value = 0;
+        break;
+      case 3:
+        mem->rhs3 = NULL;
+        mem->rhs3_op = MEMOPID_UNKNOWN;
+        mem->rhs3_size = 0;
+        mem->rhs3_value = 0;
+        break;
+      default:
+        abort();
+      }
+      return -1;
+  }
+  //  if (dump_file) fprintf(dump_file,"operand %d  %s\n",nr,print_generic_expr_to_str(operand));
+  //  if (dump_file) fprintf(dump_file,"operand %d Treecode %s\n",nr,get_tree_code_name (TREE_CODE(operand))); //addr_expr
+  //  if (dump_file) fprintf(dump_file,"operand %d Treecode %s\n",nr,print_generic_expr_to_str (TREE_TYPE(operand))); //addr_expr
+  if (TREE_CODE(operand) == INTEGER_CST)
+  {
+      if (dump_file)
+        fprintf(dump_file, "integer_cst %d  size=%ld\n", nr, int_size_in_bytes(TREE_TYPE(operand)));
+      switch (nr)
+      {
+      case 0:
+        mem->lhs = operand;
+        mem->lhs_op = MEMOPID_IMM;
+        mem->lhs_size = int_size_in_bytes(TREE_TYPE(operand));
+        mem->lhs_value = TREE_INT_CST_LOW(operand);
+        break;
+      case 1:
+        mem->rhs1 = operand;
+        mem->rhs1_op = MEMOPID_IMM;
+        mem->rhs1_size = int_size_in_bytes(TREE_TYPE(operand));
+        mem->rhs1_value = TREE_INT_CST_LOW(operand);
+        break;
+      case 2:
+        mem->rhs2 = operand;
+        mem->rhs2_op = MEMOPID_IMM;
+        mem->rhs2_size = int_size_in_bytes(TREE_TYPE(operand));
+        mem->rhs2_value = TREE_INT_CST_LOW(operand);
+        break;
+      case 3:
+        mem->rhs3 = operand;
+        mem->rhs3_op = MEMOPID_IMM;
+        mem->rhs3_size = int_size_in_bytes(TREE_TYPE(operand));
+        mem->rhs3_value = TREE_INT_CST_LOW(operand);
+        break;
+      default:
+        abort();
+      }
+      return 1;
+  }
+  // pattern
+  // if integer value, integer_cst, type
+  // if mem_ref ..., mem_ref, type
+  if (TREE_CODE(operand) == MEM_REF)
+  {
+      tree op0, op1;
+      op0 = TREE_OPERAND(operand, 0);
+      if (TREE_CODE(op0) != ADDR_EXPR)
+        return -1;
+      //      if (dump_file)  fprintf(dump_file,"operand(0) %d  %s\n",nr,print_generic_expr_to_str(op0));
+      //      if (dump_file) fprintf(dump_file,"operand(0) %d Treecode %s\n",nr,get_tree_code_name (TREE_CODE(op0))); //addr_expr
+      //      if (dump_file) fprintf(dump_file,"operand(0) %d Treecode %s\n",nr,print_generic_expr_to_str (TREE_TYPE(op0)));
+      op1 = TREE_OPERAND(operand, 1);
+      //      if (dump_file) fprintf(dump_file,"operand(1) %d  %s\n",nr,print_generic_expr_to_str(op1));
+      //      if (dump_file) fprintf(dump_file,"operand(1) %d Treecode %s\n",nr,get_tree_code_name (TREE_CODE(op1)));
+      //      if (dump_file) fprintf(dump_file,"operand(1) %d Treetype %s\n",nr,print_generic_expr_to_str (TREE_TYPE(op1)));
+      switch (nr)
+      {
+      case 0:
+        mem->lhs = TREE_OPERAND(op0, 0);
+        mem->lhs_op = MEMOPID_MEM;
+        mem->lhs_size = int_size_in_bytes(TREE_TYPE(operand));
+        mem->lhs_value = TREE_INT_CST_LOW(op1);
+        break;
+      case 1:
+        mem->rhs1 = TREE_OPERAND(op0, 0);
+        mem->rhs1_op = MEMOPID_MEM;
+        mem->rhs1_size = int_size_in_bytes(TREE_TYPE(operand));
+        mem->rhs1_value = TREE_INT_CST_LOW(op1);
+        break;
+      case 2:
+        mem->rhs2 = TREE_OPERAND(op0, 0);
+        mem->rhs2_op = MEMOPID_MEM;
+        mem->rhs2_size = int_size_in_bytes(TREE_TYPE(operand));
+        mem->rhs2_value = TREE_INT_CST_LOW(op1);
+        break;
+      case 3:
+        mem->rhs3 = TREE_OPERAND(op0, 0);
+        mem->rhs3_op = MEMOPID_MEM;
+        mem->rhs3_size = int_size_in_bytes(TREE_TYPE(operand));
+        mem->rhs3_value = TREE_INT_CST_LOW(op1);
+        break;
+      default:
+        abort();
+      }
+      return 2;
+  }
+  if (TREE_CODE(operand) == ARRAY_REF)
+  {
+      tree op0, op1;
+      op0 = TREE_OPERAND(operand, 0);
+      if (TREE_CODE(op0) != VAR_DECL)
+        return -1;
+      //      if (dump_file)  fprintf(dump_file,"operand(0) %d  %s\n",nr,print_generic_expr_to_str(op0));
+      //      if (dump_file) fprintf(dump_file,"operand(0) %d Treecode %s\n",nr,get_tree_code_name (TREE_CODE(op0))); //addr_expr
+      //      if (dump_file) fprintf(dump_file,"operand(0) %d Treecode %s\n",nr,print_generic_expr_to_str (TREE_TYPE(op0)));
+      op1 = TREE_OPERAND(operand, 1);
+      //      if (dump_file) fprintf(dump_file,"operand(1) %d  %s\n",nr,print_generic_expr_to_str(op1));
+      //      if (dump_file) fprintf(dump_file,"operand(1) %d Treecode %s\n",nr,get_tree_code_name (TREE_CODE(op1)));
+      //      if (dump_file) fprintf(dump_file,"operand(1) %d Treetype %s\n",nr,print_generic_expr_to_str (TREE_TYPE(op1)));
+      switch (nr)
+      {
+      case 0:
+        mem->lhs = op0;
+        mem->lhs_op = MEMOPID_MEM;
+        mem->lhs_size = int_size_in_bytes(TREE_TYPE(operand));
+        mem->lhs_value = TREE_INT_CST_LOW(op1);
+        break;
+      case 1:
+        mem->rhs1 = op0;
+        mem->rhs1_op = MEMOPID_MEM;
+        mem->rhs1_size = int_size_in_bytes(TREE_TYPE(operand));
+        mem->rhs1_value = TREE_INT_CST_LOW(op1);
+        break;
+      case 2:
+        mem->rhs2 = op0;
+        mem->rhs2_op = MEMOPID_MEM;
+        mem->rhs2_size = int_size_in_bytes(TREE_TYPE(operand));
+        mem->rhs2_value = TREE_INT_CST_LOW(op1);
+        break;
+      case 3:
+        mem->rhs3 = op0;
+        mem->rhs3_op = MEMOPID_MEM;
+        mem->rhs3_size = int_size_in_bytes(TREE_TYPE(operand));
+        mem->rhs3_value = TREE_INT_CST_LOW(op1);
+        break;
+      default:
+        abort();
+      }
+      return 2;
+  }
+
+  switch (nr)
+  {
+  case 0:
+      mem->lhs = operand;
+      mem->lhs_op = MEMOPID_UNKNOWN;
+      mem->lhs_size = int_size_in_bytes(TREE_TYPE(operand));
+      mem->lhs_value = 0;
+      break;
+  case 1:
+      mem->rhs1 = operand;
+      mem->rhs1_op = MEMOPID_UNKNOWN;
+      mem->rhs1_size = int_size_in_bytes(TREE_TYPE(operand));
+      mem->rhs1_value = 0;
+      break;
+  case 2:
+      mem->rhs2 = operand;
+      mem->rhs2_op = MEMOPID_UNKNOWN;
+      mem->rhs2_size = int_size_in_bytes(TREE_TYPE(operand));
+      mem->rhs2_value = 0;
+      break;
+  case 3:
+      mem->rhs3 = operand;
+      mem->rhs3_op = MEMOPID_UNKNOWN;
+      mem->rhs3_size = int_size_in_bytes(TREE_TYPE(operand));
+      mem->rhs3_value = 0;
+      break;
+  default:
+      abort();
+  }
+  return 0;
+}
+
+void tricopt_gimple_strcmp(function *function)
+{
+  basic_block bb;
+  vec<int, va_gc> *bb_ids = NULL; // negative values are stop reasons
+  vec<func_strcmp_t, va_gc> *func_strcmp = NULL;
+
+  if (dump_file != NULL)
+      fprintf(dump_file, "PASS function name optimize strcmp %s \n", get_fnname_from_decl(current_function_decl));
+
+  FOR_ALL_BB_FN(bb, function)
+  {
+      if (bb->index == 0)
+      {
+      }
+      else if (bb->index == 1)
+      {
+      }
+      else
+      {
+        gimple_stmt_iterator gsi = gsi_start_bb(bb);
+        for (; !gsi_end_p(gsi); gsi_next(&gsi))
+        {
+            gimple *stmt = gsi_stmt(gsi);
+            enum gimple_code code = gimple_code(stmt);
+            if (code == GIMPLE_CALL)
+            {
+            gcall *gimplestrcmp = dyn_cast<gcall *>(stmt);
+            tree fn_decl = gimple_call_fndecl(gimplestrcmp);
+            if (strcmp("strcmp", print_generic_expr_to_str(fn_decl)) != 0)
+            {
+      goto dont_take;
+            }
+            if ((gimple_call_num_args(gimplestrcmp) != 2))
+            {
+      goto dont_take;
+            }
+            tree c1arg1;
+            tree c1arg2;
+            tree clhs;
+            tree param0;
+            tree param1;
+
+            c1arg1 = gimple_call_arg(gimplestrcmp, 0);
+            if (get_attr_nonstring_decl(c1arg1))
+            {
+      goto dont_take;
+            }
+            clhs = gimple_call_lhs(gimplestrcmp);
+            if (dump_file)
+      fprintf(dump_file, "clhs %s\n", print_generic_expr_to_str(clhs));
+            if (dump_file)
+      fprintf(dump_file, "clhs Treecode %s\n", get_tree_code_name(TREE_CODE(clhs))); // addr_expr
+            if (dump_file)
+      fprintf(dump_file, "clhs Type Treecode %s\n", print_generic_expr_to_str(TREE_TYPE(clhs))); // addr_expr
+            if (strcmp("int", print_generic_expr_to_str(TREE_TYPE(clhs))) != 0)
+            {
+      goto dont_take;
+            }
+	    /*
+	    printf("************ Bene 0: %d %d \n", TREE_CODE(c1arg1), ADDR_EXPR);
+	    printf("c1arg1 %s\n", print_generic_expr_to_str(c1arg1));
+	    printf("c1arg1 Treecode %s\n", get_tree_code_name(TREE_CODE(c1arg1)));
+            if (dump_file)
+      fprintf(dump_file, "c1arg1 %s\n", print_generic_expr_to_str(c1arg1));
+            if (dump_file)
+      fprintf(dump_file, "c1arg1 Treecode %s\n", get_tree_code_name(TREE_CODE(c1arg1))); // addr_expr
+            if (TREE_CODE(c1arg1) != ADDR_EXPR)
+            {
+      //goto dont_take;
+            }
+	    printf("************ Bene 1\n");
+            if (dump_file)
+      fprintf(dump_file, "c1arg1 Type Treecode %s\n", print_generic_expr_to_str(TREE_TYPE(c1arg1))); // addr_expr
+            if (dump_file)
+      fprintf(dump_file, "c1arg1 op0 Treecode %s\n", print_generic_expr_to_str(TREE_OPERAND(c1arg1, 0))); // addr_expr
+            param0 = TREE_OPERAND(c1arg1, 0);
+            if (strcmp("char[31] *", print_generic_expr_to_str(TREE_TYPE(c1arg1))) != 0)
+            {
+      goto dont_take;
+            }
+	    printf("************ Bene 2\n");
+            c1arg2 = gimple_call_arg(gimplestrcmp, 1);
+            if (get_attr_nonstring_decl(c1arg2))
+            {
+      goto dont_take;
+            }
+            if (dump_file)
+      fprintf(dump_file, "c1arg2 %s\n", print_generic_expr_to_str(c1arg2));
+            if (dump_file)
+      fprintf(dump_file, "c1arg2 Treecode %s\n", get_tree_code_name(TREE_CODE(c1arg2))); // addr_expr
+            if (TREE_CODE(c1arg2) != ADDR_EXPR)
+            {
+      goto dont_take;
+            }
+            if (dump_file)
+      fprintf(dump_file, "c1arg2 Type Treecode %s\n", print_generic_expr_to_str(TREE_TYPE(c1arg2))); // addr_expr
+            if (dump_file)
+      fprintf(dump_file, "c1arg2 op0 Treecode %s\n", print_generic_expr_to_str(TREE_OPERAND(c1arg2, 0))); // addr_expr
+            param1 = TREE_OPERAND(c1arg2, 0);
+            if (strcmp("char[31] *", print_generic_expr_to_str(TREE_TYPE(c1arg2))) != 0)
+            {
+      goto dont_take;
+            }
+            if (dump_file)
+      fprintf(dump_file, "c1arg2_v Treecode %s\n", get_tree_code_name(TREE_CODE(param1))); // addr_expr
+            if ((TREE_CODE(param1) == STRING_CST))
+            {
+      goto dont_take;
+            } // do not take strings as arguments, additional option
+            if ((TREE_CODE(param0) == STRING_CST))
+            {
+      goto dont_take;
+            } // do not take strings as arguments, additional option
+	      // */
+            func_strcmp_t func;
+            func.gimple_strcmp = stmt;
+            func.bb_strcmp = bb;
+            func.gsi_strcmp = gsi;
+            func.tree_strcmp_param0 = param0;
+            func.tree_strcmp_param1 = param1;
+            vec_safe_push(func_strcmp, func);
+            dont_take:;
+            }
+	    
+        }
+      }
+  }
+  if (vec_safe_length(func_strcmp) == 0)
+  {
+
+      if (dump_file)
+        fprintf(dump_file, "No strcmp inside\n");
+      return;
+  }
+
+  int bb_len_fn = n_basic_blocks_for_fn(cfun);
+  if (bb_len_fn > 1023)
+      return;
+
+  int bb_len = -1;
+  FOR_ALL_BB_FN(bb, function)
+  {
+      if (bb->index >= bb_len)
+        bb_len = bb->index + 1;
+  }
+  if (dump_file)
+      fprintf(dump_file, "strcmp inside nr=%d bbs_fn=%d bbs=%d\n", vec_safe_length(func_strcmp), bb_len_fn, bb_len);
+
+  for (unsigned kk = 0; kk < vec_safe_length(func_strcmp); kk += 1)
+  {
+      if (dump_file)
+        fprintf(dump_file, "found strcmp inside %d bb=%d \n", kk, (*func_strcmp)[kk].bb_strcmp->index);
+  }
+  bb_vals_t *bb_vals = XNEWVEC(bb_vals_t, bb_len);
+
+  // print all sequence incl. the delimiter
+  int incr = 0;
+  if (dump_file)
+      fprintf(dump_file, "%2d= ", incr);
+  for (unsigned int kk = 0; kk < vec_safe_length(bb_ids); kk += 1)
+  {
+      if ((*bb_ids)[kk] >= 0)
+      {
+        if (dump_file)
+            fprintf(dump_file, "%d ", bb_vals[(*bb_ids)[kk]].nr);
+      }
+      if ((*bb_ids)[kk] < 0)
+      {
+        if (dump_file)
+            fprintf(dump_file, "%d \n", (*bb_ids)[kk]);
+        incr += 1;
+        if ((kk + 1) != vec_safe_length(bb_ids))
+            if (dump_file)
+            fprintf(dump_file, "%2d= ", incr);
+      }
+  }
+
+  for (unsigned int kk = 0; kk < vec_safe_length(func_strcmp); kk += 1)
+  {
+      func_strcmp_t func;
+      func = (*func_strcmp)[kk];
+      int build_bb_chain_ok = -1;
+      int analyze_bb_chain_all_ok = -1;
+      memset(&bb_vals[0], 0, sizeof(bb_vals_t) * bb_len);
+      build_bb_chain_ok = tricopt_build_bb_chain(function, &bb_vals[0], &bb_ids, &func);
+
+      // print all sequence incl. the delimiter
+      int incr = 0;
+      if (dump_file)
+        fprintf(dump_file, "%2d= ", incr);
+      for (unsigned int ll = 0; ll < vec_safe_length(bb_ids); ll += 1)
+      {
+        if ((*bb_ids)[ll] >= 0)
+        {
+            if (dump_file)
+            fprintf(dump_file, "%d ", bb_vals[(*bb_ids)[ll]].nr);
+        }
+        if ((*bb_ids)[ll] < 0)
+        {
+            if (dump_file)
+            fprintf(dump_file, "%d \n", (*bb_ids)[ll]);
+            incr += 1;
+            if ((ll + 1) != vec_safe_length(bb_ids))
+            if (dump_file)
+      fprintf(dump_file, "%2d= ", incr);
+        }
+      }
+
+      if (build_bb_chain_ok != -1)
+      {
+        analyze_bb_chain_all_ok = tricopt_analyze_bb_chain_all(function, &bb_vals[0], bb_ids, &func);
+      }
+
+      if (1 /*analyze_bb_chain_all_ok == 0*/)
+      {
+	
+        if (dump_file)
+            fprintf(dump_file, "Strcmp can be fully relpaced!\n\n");
+        gcall *gimplestrcmp = dyn_cast<gcall *>(func.gimple_strcmp);
+        tree lhs;
+        lhs = gimple_call_lhs(gimplestrcmp);
+        gsi_remove(&func.gsi_strcmp, true);
+        gassign *assign = gimple_build_assign(lhs, build_int_cst(integer_type_node, func.result));
+        gsi_insert_before(&func.gsi_strcmp, assign, GSI_NEW_STMT);
+      }
+      else
+      {
+        // strcmp could not be replaced, inlining as fast assembly routine for remaining strcmp, will be done later
+      }
+  }
+
+  XDELETEVEC(bb_vals);
+  return;
+}
+
+void tricopt_gimple_ass_stmts_strcmp(gcall *gimplestrcmp, gimple_stmt_iterator *i)
+{
+  vec<tree, va_gc> *inputs;
+  vec<tree, va_gc> *clobbers;
+  vec<tree, va_gc> *outputs;
+  tree input;
+  tree output;
+  tree clobber;
+  gassign *gimpleassign;
+
+  tree fn_decl = gimple_call_fndecl(gimplestrcmp);
+  if (strcmp("strcmp", print_generic_expr_to_str(fn_decl)) != 0)
+  {
+      goto dont_take;
+  }
+  if ((gimple_call_num_args(gimplestrcmp) != 2))
+  {
+      goto dont_take;
+  }
+  tree c1arg1;
+  tree c1arg2;
+  tree clhs;
+  tree tc1arg1;
+  tree tc1arg2;
+  tree tclhs;
+
+  c1arg1 = gimple_call_arg(gimplestrcmp, 0);
+  if (get_attr_nonstring_decl(c1arg1))
+  {
+      goto dont_take;
+  }
+  clhs = gimple_call_lhs(gimplestrcmp);
+  if (dump_file)
+      fprintf(dump_file, "clhs %s\n", print_generic_expr_to_str(clhs));
+  if (dump_file)
+      fprintf(dump_file, "clhs Treecode %s\n", get_tree_code_name(TREE_CODE(clhs))); // addr_expr
+  if (dump_file)
+      fprintf(dump_file, "clhs Type Treecode %s\n", print_generic_expr_to_str(TREE_TYPE(clhs))); // addr_expr
+  if (strcmp("int", print_generic_expr_to_str(TREE_TYPE(clhs))) != 0)
+  {
+      goto dont_take;
+  }
+  if (dump_file)
+      fprintf(dump_file, "c1arg1 %s\n", print_generic_expr_to_str(c1arg1));
+  if (dump_file)
+      fprintf(dump_file, "c1arg1 Treecode %s\n", get_tree_code_name(TREE_CODE(c1arg1))); // addr_expr
+  if (dump_file)
+      fprintf(dump_file, "c1arg1 Type Treecode %s\n", print_generic_expr_to_str(TREE_TYPE(c1arg1))); // addr_expr
+  // tbd make it more generic
+  c1arg2 = gimple_call_arg(gimplestrcmp, 1);
+  if (get_attr_nonstring_decl(c1arg2))
+  {
+      goto dont_take;
+  }
+  if (dump_file)
+      fprintf(dump_file, "c1arg2 %s\n", print_generic_expr_to_str(c1arg2));
+  if (dump_file)
+      fprintf(dump_file, "c1arg2 Treecode %s\n", get_tree_code_name(TREE_CODE(c1arg2))); // addr_expr
+  if (dump_file)
+      fprintf(dump_file, "c1arg2 Type Treecode %s\n", print_generic_expr_to_str(TREE_TYPE(c1arg2))); // addr_expr
+  tc1arg1 = create_tmp_var_raw(TREE_TYPE(c1arg1));
+  tc1arg2 = create_tmp_var_raw(TREE_TYPE(c1arg2));
+  tclhs = create_tmp_var_raw(TREE_TYPE(clhs));
+
+  gsi_remove(i, true);
+  gimpleassign = gimple_build_assign(tc1arg1, c1arg1);
+  gsi_insert_before(i, gimpleassign, GSI_NEW_STMT);
+  gimpleassign = gimple_build_assign(tc1arg2, c1arg2);
+  gsi_insert_after(i, gimpleassign, GSI_NEW_STMT);
+  gasm *asm_or_stmt;
+  inputs = NULL;
+  input = build_tree_list(NULL_TREE, build_string(2, "1"));
+  input = chainon(NULL_TREE, build_tree_list(input, tc1arg1));
+  vec_safe_push(inputs, input);
+  input = build_tree_list(NULL_TREE, build_string(2, "2"));
+  input = chainon(NULL_TREE, build_tree_list(input, tc1arg2));
+  vec_safe_push(inputs, input);
+  outputs = NULL;
+  output = build_tree_list(NULL_TREE, build_string(3, "=d"));
+  output = chainon(NULL_TREE, build_tree_list(output, tclhs));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(3, "=a"));
+  output = chainon(NULL_TREE, build_tree_list(output, tc1arg1));
+  vec_safe_push(outputs, output);
+  output = build_tree_list(NULL_TREE, build_string(3, "=a"));
+  output = chainon(NULL_TREE, build_tree_list(output, tc1arg2));
+  vec_safe_push(outputs, output);
+
+  clobbers = NULL;
+  clobber = build_tree_list(NULL_TREE, build_string(7, "memory"));
+  vec_safe_push(clobbers, clobber);
+  clobber = build_tree_list(NULL_TREE, build_string(3, "d7"));
+  vec_safe_push(clobbers, clobber);
+  clobber = build_tree_list(NULL_TREE, build_string(3, "d6"));
+  vec_safe_push(clobbers, clobber);
+  clobber = build_tree_list(NULL_TREE, build_string(3, "d5"));
+  vec_safe_push(clobbers, clobber);
+  clobber = build_tree_list(NULL_TREE, build_string(3, "d3"));
+  vec_safe_push(clobbers, clobber);
+  clobber = build_tree_list(NULL_TREE, build_string(3, "d1"));
+  vec_safe_push(clobbers, clobber);
+  clobber = build_tree_list(NULL_TREE, build_string(3, "d0"));
+  vec_safe_push(clobbers, clobber);
+
+  asm_or_stmt = gimple_build_asm_vec(
+      "	    mov.d %%d6,%1      \n"
+      "	mov.d %0,%2      \n"
+      "	or %%d6,%0      \n"
+      "	and %%d6,%%d6,3      \n"
+      "	jnz %%d6,.LL_STRCOMP_UNALIGNED%=   #is not aligned      \n"
+      ".LL_STRCOMP_AGAIN%=:      \n"
+      "	ld.d %%e6,[%1+]8      \n"
+      "	ld.d %%e0,[%2+]8      \n"
+      "	eqany.b %%d5,%%d6,0      \n"
+      "	jne   %%d0,%%d6,.LL_STRCOMP_NEQL%=   #it is not equal      \n"
+      "	jnz   %%d5,.LL_STRCOMP_ZEROL%=   #there is a zero in      \n"
+      "	eqany.b %%d5,%%d7,0      \n"
+      "	jne   %%d1,%%d7,.LL_STRCOMP_NEQH%=  #it is not equal      \n"
+      "	jnz   %%d5,.LL_STRCOMP_ZEROH%=   #there is a zero in      \n"
+      "	ld.d %%e6,[%1+]8      \n"
+      "	ld.d %%e0,[%2+]8      \n"
+      "	eqany.b %%d5,%%d6,0      \n"
+      "	jne   %%d0,%%d6,.LL_STRCOMP_NEQL%=   #it is not equal      \n"
+      "	jnz   %%d5,.LL_STRCOMP_ZEROL%=   #there is a zero in      \n"
+      "	eqany.b %%d5,%%d7,0      \n"
+      "	jne   %%d1,%%d7,.LL_STRCOMP_NEQH%=  #it is not equal      \n"
+      "	jnz   %%d5,.LL_STRCOMP_ZEROH%=   #there is a zero in      \n"
+      "	ld.d %%e6,[%1+]8      \n"
+      "	ld.d %%e0,[%2+]8      \n"
+      "	eqany.b %%d5,%%d6,0      \n"
+      "	jne   %%d0,%%d6,.LL_STRCOMP_NEQL%=   #it is not equal      \n"
+      "	jnz   %%d5,.LL_STRCOMP_ZEROL%=   #there is a zero in      \n"
+      "	eqany.b %%d5,%%d7,0      \n"
+      "	jne   %%d1,%%d7,.LL_STRCOMP_NEQH%=  #it is not equal      \n"
+      "	jnz   %%d5,.LL_STRCOMP_ZEROH%=   #there is a zero in      \n"
+      "	ld.d %%e6,[%1+]8      \n"
+      "	ld.d %%e0,[%2+]8      \n"
+      "	eqany.b %%d5,%%d6,0      \n"
+      "	jne   %%d0,%%d6,.LL_STRCOMP_NEQL%=   #it is not equal      \n"
+      "	jnz   %%d5,.LL_STRCOMP_ZEROL%=   #there is a zero in      \n"
+      "	eqany.b %%d5,%%d7,0      \n"
+      "	jne   %%d1,%%d7,.LL_STRCOMP_NEQH%=  #it is not equal      \n"
+      "	jnz   %%d5,.LL_STRCOMP_ZEROH%=   #there is a zero in      \n"
+      "	loopu .LL_STRCOMP_AGAIN%=      \n"
+      "	debug      \n"
+      ".LL_STRCOMP_NEQL%=: #it is not equal      \n"
+      "	jnz   %%d5,.LL_STRCOMP_ZEROL%=   #there is a zero in      \n"
+      "	eq.b  %%d5,%%d6,%%d0 #no zero in, check which byte is different      \n"
+      "	jz.t %%d5,0,.LL_STRCOMP_NEQ0L%= #byte zero different      \n"
+      "	jz.t %%d5,8,.LL_STRCOMP_NEQ1L%= #byte one different      \n"
+      "	jz.t %%d5,16,.LL_STRCOMP_NEQ2L%= #byte two different      \n"
+      "	sub   %0,%%d6,%%d0 #only three different      \n"
+      "	j .LL_STRCOMP10%=    \n"
+      ".LL_STRCOMP_NEQ0L%=:      \n"
+      "	extr.u  %0,%%d6,0,8      \n"
+      "	extr.u  %%d3,%%d0,0,8      \n"
+      "	j .LL_STRCOMP_SUB%=    \n"
+      ".LL_STRCOMP_NEQ1L%=:      \n"
+      "	extr.u  %0,%%d6,8,8     \n"
+      "	extr.u  %%d3,%%d0,8,8      \n"
+      "	j .LL_STRCOMP_SUB%=    \n"
+      ".LL_STRCOMP_NEQ2L%=:      \n"
+      "	extr.u  %0,%%d6,16,8      \n"
+      "	extr.u  %%d3,%%d0,16,8      \n"
+      "	j .LL_STRCOMP_SUB%=     \n"
+      ".LL_STRCOMP_NEQH%=: #it is not equal      \n"
+      "	jnz   %%d5,.LL_STRCOMP_ZEROH%=   #there is a zero in      \n"
+      "	eq.b  %%d5,%%d7,%%d1 #no zero in, check which byte is different      \n"
+      "	jz.t %%d5,0,.LL_STRCOMP_NEQ0H%= #byte zero different      \n"
+      "	jz.t %%d5,8,.LL_STRCOMP_NEQ1H%= #byte one different      \n"
+      "	jz.t %%d5,16,.LL_STRCOMP_NEQ2H%= #byte two different      \n"
+      "	sub   %0,%%d7,%%d1 #only three different      \n"
+      "	j .LL_STRCOMP10%=    \n"
+      ".LL_STRCOMP_NEQ0H%=:      \n"
+      "	extr.u  %0,%%d7,0,8      \n"
+      "	extr.u  %%d3,%%d1,0,8      \n"
+      "	j .LL_STRCOMP_SUB%=    \n"
+      ".LL_STRCOMP_NEQ1H%=:      \n"
+      "	extr.u  %0,%%d7,8,8      \n"
+      "	extr.u  %%d3,%%d1,8,8      \n"
+      "	j .LL_STRCOMP_SUB%=     \n"
+      ".LL_STRCOMP_NEQ2H%=:      \n"
+      "	extr.u  %0,%%d7,16,8      \n"
+      "	extr.u  %%d3,%%d1,16,8      \n"
+      "	j .LL_STRCOMP_SUB%=    \n"
+      ".LL_STRCOMP_ZEROL%=:      \n"
+      "	extr.u  %0,%%d6,0,8      \n"
+      "	extr.u  %%d3,%%d0,0,8      \n"
+      "	jz      %0, .LL_STRCOMP_SUB%=      \n"
+      "	jne     %0, %%d3, .LL_STRCOMP_SUB%=      \n"
+      "	extr.u  %0,%%d6,8,8      \n"
+      "	extr.u  %%d3,%%d0,8,8      \n"
+      "	jz      %0, .LL_STRCOMP_SUB%=      \n"
+      "	jne     %0, %%d3, .LL_STRCOMP_SUB%=      \n"
+      "	extr.u  %0,%%d6,16,8      \n"
+      "	extr.u  %%d3,%%d0,16,8      \n"
+      "	jz      %0, .LL_STRCOMP_SUB%=      \n"
+      "	jne     %0, %%d3, .LL_STRCOMP_SUB%=      \n"
+      "	extr.u  %0,%%d6,24,8      \n"
+      "	extr.u  %%d3,%%d0,24,8      \n"
+      "	j       .LL_STRCOMP_SUB%= #the only possible remaining difference      \n"
+      ".LL_STRCOMP_ZEROH%=:      \n"
+      "	extr.u  %0,%%d7,0,8      \n"
+      "	extr.u  %%d3,%%d1,0,8      \n"
+      "	jz      %0, .LL_STRCOMP_SUB%=      \n"
+      "	jne     %0, %%d3, .LL_STRCOMP_SUB%=      \n"
+      "	extr.u  %0,%%d7,8,8      \n"
+      "	extr.u  %%d3,%%d1,8,8      \n"
+      "	jz      %0, .LL_STRCOMP_SUB%=      \n"
+      "	jne     %0, %%d3, .LL_STRCOMP_SUB%=      \n"
+      "	extr.u  %0,%%d7,16,8      \n"
+      "	extr.u  %%d3,%%d1,16,8      \n"
+      "	jz      %0, .LL_STRCOMP_SUB%=      \n"
+      "	jne     %0, %%d3, .LL_STRCOMP_SUB%=      \n"
+      "	extr.u  %0,%%d7,24,8      \n"
+      "	extr.u  %%d3,%%d1,24,8      \n"
+      "	j       .LL_STRCOMP_SUB%= #the only possible remaining difference      \n"
+      ".LL_STRCOMP_UNALIGNED%=:      \n"
+      "	j       .LL_STRCOMP7%=     \n"
+      ".LL_STRCOMP9%=:      \n"
+      "	jz      %0, .LL_STRCOMP10%=               \n"
+      ".LL_STRCOMP7%=:      \n"
+      "	ld.bu   %0, [%1+]1      \n"
+      "	ld.bu   %%d3, [%2+]1      \n"
+      "	jeq     %0, %%d3, .LL_STRCOMP9%=      \n"
+      ".LL_STRCOMP_SUB%=:      \n"
+      "       sub     %0, %%d3      \n"
+      ".LL_STRCOMP10%=:   \n",
+      inputs, outputs, clobbers, NULL);
+
+  gimple_asm_set_volatile(asm_or_stmt, true);
+  gsi_insert_after(i, asm_or_stmt, GSI_NEW_STMT);
+
+  gimpleassign = gimple_build_assign(clhs, tclhs);
+  gsi_insert_after(i, gimpleassign, GSI_NEW_STMT);
+dont_take:;
+}
+
+void tricopt_gimple_ass_strcmp(function *function)
+{
+  basic_block bb;
+  if (dump_file != NULL)
+      fprintf(dump_file, "PASS function name optimize strcmp ass %s \n", get_fnname_from_decl(current_function_decl));
+
+  FOR_ALL_BB_FN(bb, function)
+  {
+      if (bb->index == 0)
+      {
+      }
+      else if (bb->index == 1)
+      {
+      }
+      else
+      {
+        gimple_stmt_iterator gsi = gsi_start_bb(bb);
+        for (; !gsi_end_p(gsi); gsi_next(&gsi))
+        {
+            gimple *stmt = gsi_stmt(gsi);
+            enum gimple_code code = gimple_code(stmt);
+            if (code == GIMPLE_CALL)
+            {
+            gcall *gimplestrcmp = dyn_cast<gcall *>(stmt);
+            tricopt_gimple_ass_stmts_strcmp(gimplestrcmp, &gsi);
+            }
+        }
+      }
+  }
+}
+
+unsigned int tricopt_strcmp_execute(function *function)
+{
+  if (current_function_decl == NULL)
+      return 0;
+  if (tric_opt_flag_strcmp_imm != 0)
+  {
+      tricopt_gimple_strcmp(function); // optimize if values known
+  }
+  else if (tric_opt_flag_strcmp_ass != 0)
+  {
+      tricopt_gimple_ass_strcmp(function); // optimize with assembler plugin
+  }
+  return TODO_verify_all;
+}
+
+unsigned int tricopt_gimple_execute(function *function)
+{
+
+  if (dump_file != NULL)
+      fprintf(dump_file, "PASS function name %s crc=%x len=%x\n", get_fnname_from_decl(current_function_decl), cfun->machine->crc_sign[0], cfun->machine->crc_sign[1]);
+
+  if ((cfun->machine->crc_sign[0] == 0xb7f00da0) && (cfun->machine->crc_sign[1] == 0x3815))
+  {
+      if (dump_file)
+        fprintf(dump_file, "pass found matching function coremark matrix_test \n");
+      if (DECL_ATTRIBUTES(current_function_decl) == NULL)
+      {
+        if (dump_file)
+            fprintf(dump_file, "coremark matrix_test has no attributes\n");
+        DECL_ATTRIBUTES(current_function_decl) = make_attribute("noinline", "", DECL_ATTRIBUTES(current_function_decl)); // not sufficient enough
+        DECL_UNINLINABLE(current_function_decl) = 1;                                                                     // sufficient
+        if (DECL_ATTRIBUTES(current_function_decl) == NULL)
+            if (dump_file)
+            fprintf(dump_file, "coremark matrix_test has still no attributes\n");
+        if (lookup_attribute("noinline", DECL_ATTRIBUTES(current_function_decl)))
+            if (dump_file)
+            fprintf(dump_file, "has now noinline\n");
+      }
+      else
+      {
+        if (dump_file)
+            fprintf(dump_file, "coremark matrix_test has attributes\n");
+      }
+  }
+
+  if ((cfun->machine->crc_sign[0] == 0x42f45bf8) && (cfun->machine->crc_sign[1] == 0x3b44)) // with -g
+  {
+      if (dump_file)
+        fprintf(dump_file, "pass found matching function coremark matrix_test \n");
+      if (DECL_ATTRIBUTES(current_function_decl) == NULL)
+      {
+        if (dump_file)
+            fprintf(dump_file, "coremark matrix_test has no attributes\n");
+        DECL_ATTRIBUTES(current_function_decl) = make_attribute("noinline", "", DECL_ATTRIBUTES(current_function_decl)); // not sufficient enough
+        DECL_UNINLINABLE(current_function_decl) = 1;                                                                     // sufficient
+        if (DECL_ATTRIBUTES(current_function_decl) == NULL)
+            if (dump_file)
+            fprintf(dump_file, "coremark matrix_test has still no attributes\n");
+        if (lookup_attribute("noinline", DECL_ATTRIBUTES(current_function_decl)))
+            if (dump_file)
+            fprintf(dump_file, "has now noinline\n");
+      }
+      else
+      {
+        if (dump_file)
+            fprintf(dump_file, "coremark matrix_test has attributes\n");
+      }
+  }
+
+  if ((cfun->machine->crc_sign[0] == 0x766f14e4) && (cfun->machine->crc_sign[1] == 0x3394))
+  {
+      if (dump_file)
+        fprintf(dump_file, "pass found matching function dhrystone Proc_1 \n");
+      tricopt_gimple_gen_proc_1(function);
+  }
+  if ((cfun->machine->crc_sign[0] == 0x15aff554) && (cfun->machine->crc_sign[1] == 0x369b))
+  {
+      if (dump_file)
+        fprintf(dump_file, "pass found matching function dhrystone Proc_1 \n");
+      tricopt_gimple_gen_proc_1(function);
+  }
+
+  if (tric_opt_flag_strcpy_imm != 0)
+  {
+      tricopt_gimple_gen_strcpy(function);
+  }
+
+  if ((cfun->machine->crc_sign[0] == 0xab047593) && (cfun->machine->crc_sign[1] == 0x3db4))
+  {
+      if (dump_file)
+        fprintf(dump_file, "pass found matching function coremark core_bench_list \n");
+      tricopt_gimple_gen_bench_list(function);
+  }
+  if ((cfun->machine->crc_sign[0] == 0x2922284f) && (cfun->machine->crc_sign[1] == 0x43a4)) // with -g
+  {
+      if (dump_file)
+        fprintf(dump_file, "pass found matching function coremark core_bench_list \n");
+      tricopt_gimple_gen_bench_list(function);
+  }
+
+  if ((cfun->machine->crc_sign[0] == 0xe5796e36) && (cfun->machine->crc_sign[1] == 0xe18))
+  {
+      if (dump_file)
+        fprintf(dump_file, "pass found matching function coremark crcu8 \n");
+      tricopt_gimple_gen_crcu8(function);
+  }
+  if ((cfun->machine->crc_sign[0] == 0x92ce5275) && (cfun->machine->crc_sign[1] == 0xed6)) // with -g
+  {
+      if (dump_file)
+        fprintf(dump_file, "pass found matching function coremark crcu8 \n");
+      tricopt_gimple_gen_crcu8(function);
+  }
+
+  if ((cfun->machine->crc_sign[0] == 0xaa4500a7) && (cfun->machine->crc_sign[1] == 0x1415))
+  {
+      if (dump_file)
+        fprintf(dump_file, "pass found matching function coremark matrix_sum \n");
+      tricopt_gimple_gen_mat_ret(function);
+  }
+  if ((cfun->machine->crc_sign[0] == 0xff8ed00c) && (cfun->machine->crc_sign[1] == 0x155a))
+  {
+      if (dump_file)
+        fprintf(dump_file, "pass found matching function coremark matrix_sum \n"); // with -g
+      tricopt_gimple_gen_mat_ret(function);
+  }
+
+  if ((cfun->machine->crc_sign[0] == 0x945651b2) && (cfun->machine->crc_sign[1] == 0xf90))
+  {
+      if (dump_file)
+        fprintf(dump_file, "pass found matching function coremark matrix_mul_const \n");
+      tricopt_gimple_gen_mat_mul_const(function);
+  }
+  if ((cfun->machine->crc_sign[0] == 0xbab0d4e6) && (cfun->machine->crc_sign[1] == 0x0ffe))
+  {
+      if (dump_file)
+        fprintf(dump_file, "pass found matching function coremark matrix_mul_const \n"); // with -g
+      tricopt_gimple_gen_mat_mul_const(function);
+  }
+
+
+  if ((cfun->machine->crc_sign[0] == 0x5eb58d69) && (cfun->machine->crc_sign[1] == 0xc8a))
+  {
+      if (dump_file)
+        fprintf(dump_file, "pass found matching function coremark matrix_add_const \n");
+      tricopt_gimple_gen_mat_add_const(function);
+  }
+  if ((cfun->machine->crc_sign[0] == 0x2c56a659) && (cfun->machine->crc_sign[1] == 0x0cf8))
+  {
+      if (dump_file)
+        fprintf(dump_file, "pass found matching function coremark matrix_add_const \n"); // with -g
+      tricopt_gimple_gen_mat_add_const(function);
+  }
+
+  if ((cfun->machine->crc_sign[0] == 0x649d4eb9) && (cfun->machine->crc_sign[1] == 0xf90))
+  {
+      if (dump_file)
+        fprintf(dump_file, "pass found matching function matrix_mul_vect \n");
+      tricopt_gimple_gen_mat_mul_vect(function);
+  }
+  if ((cfun->machine->crc_sign[0] == 0x35404d3) && (cfun->machine->crc_sign[1] == 0x0ffe))
+  {
+      if (dump_file)
+        fprintf(dump_file, "pass found matching function matrix_mul_vect \n"); // with -g
+      tricopt_gimple_gen_mat_mul_vect(function);
+  }
+
+#if 0
+  if ((cfun->machine->crc_sign[0] == 0xe93b1fc0) && (cfun->machine->crc_sign[1] == 0xfc7))
+  {
+      if (dump_file)
+        fprintf(dump_file, "pass found matching function matrix_mul_matrix \n");
+      tricopt_gimple_gen_mat_mul_matrix(function);
+  }
+  if ((cfun->machine->crc_sign[0] == 0xc6dee1f4) && (cfun->machine->crc_sign[1] == 0x104e))
+  {
+      if (dump_file)
+        fprintf(dump_file, "pass found matching function matrix_mul_matrix \n"); // with -g
+      tricopt_gimple_gen_mat_mul_matrix(function);
+  }  
+#endif
+
+  if ((cfun->machine->crc_sign[0] == 0xe93b1fc0) && (cfun->machine->crc_sign[1] == 0xfc7))
+  {
+      if (dump_file)
+        fprintf(dump_file, "pass found matching function matrix_mul_matrix_bitextract  \n");
+      tricopt_gimple_gen_mat(function);
+  }
+  if ((cfun->machine->crc_sign[0] == 0xc6dee1f4) && (cfun->machine->crc_sign[1] == 0x104e))
+  {
+      if (dump_file)
+        fprintf(dump_file, "pass found matching function matrix_mul_matrix_bitextract  \n"); // with -g
+      tricopt_gimple_gen_mat(function);
+  }  
+
+  return TODO_verify_all;
+}
+
+#define TRIC_INSTR_NOQUAL 0x1
+#define TRIC_INSTR_PLUS 0x4
+#define TRIC_INSTR_LO_SUM 0x8
+#define TRIC_INSTR_MINUS 0x10
+#define TRIC_INSTR_MULT 0x20
+#define TRIC_INSTR_POSTMODIFY 0x40
+#define TRIC_INSTR_PREMODIFY 0x80
+#define TRIC_INSTR_MEM 0x100
+#define TRIC_INSTR_MEM8 0x200
+#define TRIC_INSTR_MEM16 0x400
+#define TRIC_INSTR_MEM32 0x800
+#define TRIC_INSTR_MEM64 0x1000
+#define TRIC_INSTR_SEXTEND 0x2000
+#define TRIC_INSTR_ZEXTEND 0x4000
+#define TRIC_INSTR_SEXTRACT 0x8000
+#define TRIC_INSTR_ZEXTRACT 0x10000
+#define TRIC_INSTR_PIPEFAIL 0x40000000
+#define TRIC_INSTR_FAIL 0x80000000
+
+typedef struct tric_instr
+{
+  //  int src_reg_id[32];
+  //  int src_reg_id_cnt;
+  //  int dest_reg_id[32];
+  //  int dest_reg_id_cnt;
+  int dest_reg_id_clk_abs[32];
+  int dest_reg_id_clk[32];
+  int dest_store_id_clk_abs[32];
+  int dest_store_id_clk[32];
+  unsigned int src_qual;
+  unsigned int dest_qual;
+  unsigned int src_mask;
+  unsigned int dest_mask;
+  tree src_op[32];
+  tree dest_op[32];
+  int src_ofs;
+  int dest_ofs;
+  int mdid;
+  int uid;
+  int last;
+  int clk;
+  struct tric_instr *pnext;
+  struct tric_instr *pprev;
+  rtx_insn *insn;
+  enum attr_pipe pipe;
+  int no_latency;
+} tric_instr_t;
+
+static void tricopt_rtl_expr_instr(rtx i, unsigned int *p_qual, int *p_ofs, unsigned int *pmask, tree *op);
+static int tricopt_instr_io(rtx_insn *insn, tric_instr_t *insn_io);
+static enum attr_pipe tricopt_get_pipe_attr(rtx_insn *insn);
+static int tricopt_is_insn(rtx_insn *insn);
+static void tricopt_rtl_insn_info_all(tric_instr_t *tric_instr);
+static void tricopt_f_rtl_insn_info_all(FILE *file, tric_instr_t *tric_instr, int verbosity);
+static const char *tricopt_get_attr_pipe_str(rtx_insn *insn);
+static const char *tricopt_get_pipe_str(int pipe);
+static char ch_tric_get_regname[20];
+
+static const char *tricopt_get_pipe_str(int pipe)
+{
+  switch (pipe)
+  {
+  case PIPE_NONE:
+      return "none";
+  case PIPE_IP:
+      return "ip";
+  case PIPE_IP2:
+      return "ip2";
+  case PIPE_IPDI:
+      return "ipdi";
+  case PIPE_IPDS:
+      return "ipds";
+  case PIPE_IP3:
+      return "ip3";
+  case PIPE_IPM:
+      return "ipm";
+  case PIPE_LSP:
+      return "lsp";
+  case PIPE_LP:
+      return "lp";
+  case PIPE_DUAL:
+      return "dual";
+  case PIPE_CTX:
+      return "ctx";
+  case PIPE_JIP:
+      return "jip";
+  case PIPE_AALU:
+      return "aalu";
+  case PIPE_JLS:
+      return "jls";
+  case PIPE_LDA:
+      return "lda";
+  case PIPE_LDD:
+      return "ldd";
+  case PIPE_STA:
+      return "sta";
+  case PIPE_STD:
+      return "std";
+  case PIPE_MIXDD:
+      return "mixdd";
+  case PIPE_MIXDS:
+      return "mixds";
+  case PIPE_FP:
+      return "fp";
+  case PIPE_FP2:
+      return "fp2";
+  case PIPE_FP3:
+      return "fp3";
+  case PIPE_FPDIV:
+      return "fpdiv";
+  case PIPE_TBC:
+      return "tbc";
+  default:
+      return "xxx";
+  }
+}
+
+static const char *
+tricopt_get_attr_pipe_str(rtx_insn *insn)
+{
+  if (!tricopt_is_insn(insn))
+      return "NInsn";
+  return tricopt_get_pipe_str(get_attr_pipe(insn));
+}
+
+static char *tric_get_regname(int id)
+{
+  if (id < FIRST_PSEUDO_REGISTER)
+  {
+      strcpy(ch_tric_get_regname, reg_names[id]);
+  }
+  else
+      sprintf(&ch_tric_get_regname[0], "r%d", id);
+  return &ch_tric_get_regname[0];
+}
+
+static void tricopt_f_rtl_insn_info_all(FILE *file, tric_instr_t *tric_instr, int verbosity)
+{
+  rtx_insn *insn;
+  insn = tric_instr->insn;
+  if (!file)
+      return;
+  if (insn == NULL)
+      return;
+  if (INSN_CODE(insn) == 0)
+      return;
+  const char *pattern = (NOTE_P(insn)
+                             ? "note"
+                             : str_pattern_slim(PATTERN(insn)));
+
+  if (file)
+      fprintf(file, "**\t %4d | %4d | %-30s ", tric_instr->clk, INSN_UID(insn), pattern);
+
+  if (NOTE_P(insn) || LABEL_P(insn) || (recog_memoized(insn) < 0))
+  {
+      if (file)
+        fprintf(file, "nothing");
+  }
+  else
+  {
+      // todo crashes sometimes
+      // if (file) print_reservation (file, insn);
+  }
+  if (file)
+      fprintf(file, " dest_qual=%8.8X src_qual=%8.8X pipe=%s mdid=%d no_lat=%d ",
+              tric_instr->dest_qual, tric_instr->src_qual, tricopt_get_pipe_str(tric_instr->pipe), tric_instr->mdid, tric_instr->no_latency);
+  if (file)
+      fprintf(file, "   ");
+  if (file)
+  {
+      fprintf(file, "dst(%8.8x) ", tric_instr->dest_mask);
+      fprintf(file, "src(%8.8x) ", tric_instr->src_mask);
+      if (tric_instr->dest_ofs != 0)
+        fprintf(file, "dest_ofs=%d ", tric_instr->dest_ofs);
+      if (tric_instr->src_ofs != 0)
+        fprintf(file, "src_ofs=%d ", tric_instr->src_ofs);
+      fprintf(file, "\n");
+      if (verbosity == 1)
+      {
+        if (tric_instr->dest_mask != 0)
+        {
+            for (unsigned int i = 0; i < 32; i += 1)
+            {
+            if (((1 << i) & tric_instr->dest_mask) != 0)
+            {
+      if (dump_file)
+              fprintf(dump_file, "DST reg %s = ", tric_get_regname(i));
+      if (tric_instr->dest_op[i] != NULL)
+      {
+              if (dump_file)
+                fprintf(dump_file, " %s\n", print_generic_expr_to_str(tric_instr->dest_op[i]));
+      }
+      else
+      {
+              if (dump_file)
+                fprintf(dump_file, " Unknown \n");
+      }
+            }
+            }
+        }
+        if (tric_instr->src_mask != 0)
+        {
+            for (unsigned int i = 0; i < 32; i += 1)
+            {
+            if (((1 << i) & tric_instr->src_mask) != 0)
+            {
+      if (dump_file)
+              fprintf(dump_file, "SRC reg %s = ", tric_get_regname(i));
+      if (tric_instr->src_op[i] != NULL)
+      {
+              if (dump_file)
+                fprintf(dump_file, " %s\n", print_generic_expr_to_str(tric_instr->src_op[i]));
+      }
+      else
+      {
+              if (dump_file)
+                fprintf(dump_file, " Unknown \n");
+      }
+            }
+            }
+        }
+      }
+  }
+}
+
+static void tricopt_rtl_insn_info_all(tric_instr_t *tric_instr)
+{
+  rtx_insn *insn;
+  insn = tric_instr->insn;
+  if (!dump_file)
+      return;
+  if (insn == NULL)
+      return;
+  if (INSN_CODE(insn) == 0)
+      return;
+  int priority = NOTE_P(insn) ? 0 : INSN_PRIORITY(insn);
+  const char *pattern = (NOTE_P(insn)
+                             ? "note"
+                             : str_pattern_slim(PATTERN(insn)));
+
+  if (dump_file)
+      fprintf(dump_file, "**\t %4d | %4d | %4d | %-30s ", tric_instr->clk, INSN_UID(insn), priority, pattern);
+
+  if (NOTE_P(insn) || LABEL_P(insn) || (recog_memoized(insn) < 0))
+  {
+      if (dump_file)
+        fprintf(dump_file, "nothing");
+  }
+  else
+  {
+      if (dump_file)
+        print_reservation(dump_file, insn);
+  }
+  if (dump_file)
+      fprintf(dump_file, " dest_qual=%8.8X src_qual=%8.8X pipe=%s mdid=%d no_lat=%d ",
+              tric_instr->dest_qual, tric_instr->src_qual, tricopt_get_pipe_str(tric_instr->pipe), tric_instr->mdid, tric_instr->no_latency);
+  if (dump_file)
+      fprintf(dump_file, "   ");
+  //  if (dump_file)
+  //    {
+  //    for (i=0; i<tric_instr->dest_reg_id_cnt; i+=1) {
+  //        fprintf(dump_file,"rd(%s)=%d[%d] wr(%s)=%d[%d] ",tric_get_regname(tric_instr->dest_reg_id[i]),tric_instr->dest_reg_id_clk[i],tric_instr->dest_reg_id_clk_abs[i],
+  //                tric_get_regname(tric_instr->dest_reg_id[i]),tric_instr->dest_store_id_clk[i],tric_instr->dest_store_id_clk_abs[i]);
+  //    }
+  if (dump_file)
+      fprintf(dump_file, "dst(%8.8x) ", tric_instr->dest_mask);
+  if (dump_file)
+      fprintf(dump_file, "src(%8.8x) ", tric_instr->src_mask);
+  if (dump_file)
+      fprintf(dump_file, "\n");
+}
+
+/* Return true if INSN is real instruction bearing insn.  */
+static int
+tricopt_is_insn(rtx_insn *insn)
+{
+  if (insn == 0)
+      return 0;
+  return (INSN_P(insn) && GET_CODE(PATTERN(insn)) != USE && GET_CODE(PATTERN(insn)) != CLOBBER && GET_CODE(PATTERN(insn)) != ADDR_VEC);
+}
+
+static enum attr_pipe tricopt_get_pipe_attr(rtx_insn *insn)
+{
+  if (tricopt_is_insn(insn))
+  {
+      return get_attr_pipe(insn);
+  }
+  else
+      return PIPE_NONE;
+}
+
+static int tricopt_instr_io(rtx_insn *insn, tric_instr_t *insn_io)
+{
+  rtx pat;
+  insn_io->src_qual = 0;
+  insn_io->dest_qual = 0;
+  insn_io->mdid = 0;
+  insn_io->uid = INSN_UID(insn);
+  insn_io->insn = insn;
+  insn_io->pipe = tricopt_get_pipe_attr(insn);
+  if (insn_io->pipe == PIPE_CTX)
+  {
+      // update for upper context registers
+      // d8,d9,d10,d11,d12,d13,d14,d15,a10,a11,a12,a13,a14,a15
+      // TODO if regs have different latencies
+      insn_io->dest_mask |= 0xFC00FF00;
+  }
+  if ((pat = single_set(insn)) != NULL)
+  {
+      tricopt_rtl_expr_instr(SET_SRC(pat), &insn_io->src_qual, &insn_io->src_ofs, &insn_io->src_mask, &insn_io->src_op[0]);
+      tricopt_rtl_expr_instr(SET_DEST(pat), &insn_io->dest_qual, &insn_io->dest_ofs, &insn_io->dest_mask, &insn_io->dest_op[0]);
+      insn_io->pipe = tricopt_get_pipe_attr(insn);
+      if (insn_io->pipe == PIPE_NONE)
+      {
+        insn_io->src_qual |= TRIC_INSTR_PIPEFAIL;
+        insn_io->dest_qual |= TRIC_INSTR_PIPEFAIL;
+      }
+      if (insn_io->pipe == PIPE_TBC)
+      {
+        insn_io->src_qual |= TRIC_INSTR_PIPEFAIL;
+        insn_io->dest_qual |= TRIC_INSTR_PIPEFAIL;
+      }
+      if (insn_io->pipe == PIPE_CTX)
+      {
+        // update for upper context registers
+        // d8,d9,d10,d11,d12,d13,d14,d15,a10,a11,a12,a13,a14,a15
+        // TODO if regs have different latencies
+        insn_io->dest_mask |= 0xFC00FF00;
+      }
+      //     insn_io->mdid=get_attr_mdid(insn);
+      return 0;
+  }
+  insn_io->pipe = tricopt_get_pipe_attr(insn);
+  if (insn_io->pipe == PIPE_CTX)
+  {
+      return 0;
+  }
+  insn_io->src_qual |= TRIC_INSTR_FAIL;
+  insn_io->dest_qual |= TRIC_INSTR_FAIL;
+  return -1;
+}
+
+static void tricopt_rtl_expr_instr(rtx i, unsigned int *p_qual, int *p_ofs, unsigned int *pmask, tree *op)
+{
+  machine_mode op_mode;
+  if (!i)
+      return;
+  //   if (dump_file) fprintf(dump_file,"%s", GET_RTX_NAME(GET_CODE(i)));
+  switch (GET_CODE(i))
+  {
+  case POST_MODIFY:
+      *p_qual |= TRIC_INSTR_POSTMODIFY;
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      tricopt_rtl_expr_instr(XEXP(i, 1), p_qual, p_ofs, pmask, op);
+      break;
+  case POST_INC:
+      *p_qual |= TRIC_INSTR_POSTMODIFY;
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      break;
+  case PRE_MODIFY:
+      *p_qual |= TRIC_INSTR_POSTMODIFY;
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      tricopt_rtl_expr_instr(XEXP(i, 1), p_qual, p_ofs, pmask, op);
+      break;
+  case PRE_INC:
+      *p_qual |= TRIC_INSTR_PREMODIFY;
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      break;
+  case PRE_DEC:
+      *p_qual |= TRIC_INSTR_PREMODIFY;
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      break;
+  case POST_DEC:
+      *p_qual |= TRIC_INSTR_POSTMODIFY;
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      break;
+  case POPCOUNT:
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      break;
+  case ABS:
+  case NOT:
+  case NEG:
+  case SIGN_EXTEND:
+      *p_qual |= TRIC_INSTR_SEXTEND;
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      break;
+  case ZERO_EXTEND:
+      *p_qual |= TRIC_INSTR_ZEXTEND;
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      break;
+  case SIGN_EXTRACT:
+      *p_qual |= TRIC_INSTR_SEXTRACT;
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      tricopt_rtl_expr_instr(XEXP(i, 1), p_qual, p_ofs, pmask, op);
+      tricopt_rtl_expr_instr(XEXP(i, 2), p_qual, p_ofs, pmask, op);
+      break;
+  case ZERO_EXTRACT:
+      *p_qual |= TRIC_INSTR_ZEXTRACT;
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      tricopt_rtl_expr_instr(XEXP(i, 1), p_qual, p_ofs, pmask, op);
+      tricopt_rtl_expr_instr(XEXP(i, 2), p_qual, p_ofs, pmask, op);
+      break;
+  case FMA:
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      tricopt_rtl_expr_instr(XEXP(i, 1), p_qual, p_ofs, pmask, op);
+      tricopt_rtl_expr_instr(XEXP(i, 2), p_qual, p_ofs, pmask, op);
+      break;
+  case ROTATE:
+  case LSHIFTRT:
+  case ASHIFTRT:
+  case SMIN:
+  case SMAX:
+  case UMIN:
+  case UMAX:
+  case UDIV:
+  case UMOD:
+  case MOD:
+  case DIV:
+  case ASHIFT:
+  case AND:
+  case XOR:
+  case IOR:
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      tricopt_rtl_expr_instr(XEXP(i, 1), p_qual, p_ofs, pmask, op);
+      break;
+  case LABEL_REF:
+      break;
+  case PC:
+      break;
+  case IF_THEN_ELSE:
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op); // branch type
+      tricopt_rtl_expr_instr(XEXP(i, 1), p_qual, p_ofs, pmask, op); // label
+      tricopt_rtl_expr_instr(XEXP(i, 2), p_qual, p_ofs, pmask, op); // pc
+      break;
+  case NE:
+  case EQ:
+  case LT:
+  case GE:
+  case LTU:
+  case GEU:
+  case GT:
+  case LE:
+      // Branch condition
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      tricopt_rtl_expr_instr(XEXP(i, 1), p_qual, p_ofs, pmask, op);
+      break;
+  case SUBREG:
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      break;
+  case REG:
+      // TODO testing of EREG
+      if (REGNO(i) < 32)
+      {
+        *pmask |= (1 << (unsigned int)REGNO(i));
+        if (GET_MODE(i) == DImode)
+            *pmask |= (1 << (unsigned int)(REGNO(i) + 1)); // EREG
+        if (GET_MODE(i) == DFmode)
+            *pmask |= (1 << (unsigned int)(REGNO(i) + 1)); // EREG
+        if (GET_MODE(i) == PDImode)
+            *pmask |= (1 << (unsigned int)(REGNO(i) + 1)); // EREG
+      }
+      else
+      {
+        *p_qual |= TRIC_INSTR_FAIL;
+      }
+      if (REG_EXPR(i))
+      {
+        if (REGNO(i) < 32)
+        {
+            //       	 htc_edump ("%F: ??? %r\n", i);
+            //       	 if (dump_file) fprintf(dump_file,"arg %s\n",print_generic_expr_to_str(REG_EXPR(i)));
+            op[(unsigned int)REGNO(i)] = REG_EXPR(i);
+            if (GET_MODE(i) == DImode)
+            op[(unsigned int)REGNO(i) + 1] = REG_EXPR(i); // EREG
+            if (GET_MODE(i) == DFmode)
+            op[(unsigned int)REGNO(i) + 1] = REG_EXPR(i); // EREG
+            if (GET_MODE(i) == PDImode)
+            op[(unsigned int)REGNO(i) + 1] = REG_EXPR(i); // EREG
+        }
+      }
+      break;
+  case MEM:
+      if (GET_MODE(i) == SImode)
+        *p_qual |= TRIC_INSTR_MEM32;
+      if (GET_MODE(i) == SFmode)
+        *p_qual |= TRIC_INSTR_MEM32;
+      if (GET_MODE(i) == DImode)
+        *p_qual |= TRIC_INSTR_MEM64;
+      if (GET_MODE(i) == DFmode)
+        *p_qual |= TRIC_INSTR_MEM64;
+      if (GET_MODE(i) == HImode)
+        *p_qual |= TRIC_INSTR_MEM16;
+      if (GET_MODE(i) == HFmode)
+        *p_qual |= TRIC_INSTR_MEM16;
+      if (GET_MODE(i) == QImode)
+        *p_qual |= TRIC_INSTR_MEM8;
+      *p_qual |= TRIC_INSTR_MEM;
+      *p_ofs = 0;
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      break;
+  case PLUS:
+      *p_qual |= TRIC_INSTR_PLUS;
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      tricopt_rtl_expr_instr(XEXP(i, 1), p_qual, p_ofs, pmask, op);
+      break;
+  case LO_SUM:
+      *p_qual |= TRIC_INSTR_LO_SUM;
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      tricopt_rtl_expr_instr(XEXP(i, 1), p_qual, p_ofs, pmask, op);
+      break;
+  case MINUS:
+      *p_qual |= TRIC_INSTR_MINUS;
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      tricopt_rtl_expr_instr(XEXP(i, 1), p_qual, p_ofs, pmask, op);
+      break;
+  case MULT:
+      *p_qual |= TRIC_INSTR_MULT;
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      tricopt_rtl_expr_instr(XEXP(i, 1), p_qual, p_ofs, pmask, op);
+      break;
+  case CALL:
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      break;
+  case ASM_OPERANDS:
+      break;
+  case SYMBOL_REF:
+      break;
+  case HIGH:
+      tricopt_rtl_expr_instr(XEXP(i, 0), p_qual, p_ofs, pmask, op);
+      break;
+  case CONST_INT:
+      if (*p_qual & TRIC_INSTR_MEM)
+        *p_ofs = INTVAL(i);
+      break;
+  case CONST_DOUBLE:
+      break;
+  case CONST:
+      break;
+  case UNSPEC:
+      // TODO how to deal with unspec
+      //        htc_edump ("%F: ??? %r\n", i);
+      *p_qual |= TRIC_INSTR_NOQUAL;
+      break;
+  default:
+      // TODO how to deal with unknown
+      // TODO introduce a switch treat unkown as error, for insn analysis
+      //	htc_edump ("%F: ??? %r\n", i);
+      //        gcc_unreachable ();
+      *p_qual |= TRIC_INSTR_NOQUAL;
+      break;
+  }
+}
+
+unsigned int
+tricopt_execute_arg(function *function)
+{
+  tree fdecl;
+  tree args;
+  basic_block bb;
+  rtx_insn *insn;
+  unsigned int func_args;
+  vec<tree, va_gc> *trvec_args = NULL;
+  if (dump_file != NULL)
+      fprintf(dump_file, "PASS function name optimize args rt %s \n", get_fnname_from_decl(current_function_decl));
+  // exclusion criteria
+  // only do it if size below UNITS_PER_WORD
+  for (fdecl = DECL_ARGUMENTS(current_function_decl);
+       fdecl; fdecl = DECL_CHAIN(fdecl))
+  {
+      args = fdecl;
+      if (dump_file)
+        fprintf(dump_file, "arg %s\n", print_generic_expr_to_str(args));
+      if (dump_file)
+        fprintf(dump_file, "arg %s\n", print_generic_expr_to_str(TREE_TYPE(args)));
+      if (dump_file)
+        fprintf(dump_file, "arg size=%ld\n", int_size_in_bytes(TREE_TYPE(args)));
+      if (dump_file)
+        fprintf(dump_file, "arg unsigned=%d\n", TYPE_UNSIGNED(TREE_TYPE(args)));
+      if (int_size_in_bytes(TREE_TYPE(args)) < UNITS_PER_WORD)
+      {
+        vec_safe_push(trvec_args, args);
+      }
+  }
+  if (vec_safe_length(trvec_args) == 0)
+      return TODO_verify_all; // No argument with <UNIT_PER_WORD
+  df_set_flags(DF_LR_RUN_DCE);
+  df_set_flags(DF_DEFER_INSN_RESCAN);
+  df_note_add_problem();
+  df_analyze();
+  func_args = crtl->args.info.args_mask;
+  int insn_cnt = 0;
+  FOR_EACH_BB_FN(bb, function)
+  {
+      FOR_BB_INSNS(bb, insn)
+      {
+        if (!NONDEBUG_INSN_P(insn))
+            continue;
+        if (!insn)
+            continue;
+        if (dump_file)
+            fprintf(dump_file, "UID= %d ", INSN_UID(insn));
+        tric_instr_t tric_insn;
+        memset(&tric_insn, 0, sizeof(tric_instr_t));
+        tricopt_instr_io(insn, &tric_insn); // assigne dependencies
+        if (dump_file)
+            tricopt_f_rtl_insn_info_all(dump_file, &tric_insn, 1);
+        // check if the insn is relevant
+        if ((tric_insn.src_qual != TRIC_INSTR_SEXTEND) && (tric_insn.src_qual != TRIC_INSTR_ZEXTEND))
+        {
+            // if the insn is none extend, remove the registers actually used from func_args
+            func_args &= ~tric_insn.src_mask;
+            func_args &= ~tric_insn.dest_mask;
+            continue;
+        }
+        // it is an extend insns
+        if ((func_args & tric_insn.src_mask) == 0)
+        {
+            func_args &= ~tric_insn.src_mask;
+            func_args &= ~tric_insn.dest_mask;
+            continue;
+        }
+        if (tric_insn.src_mask != tric_insn.dest_mask)
+        {
+            func_args &= ~tric_insn.src_mask;
+            func_args &= ~tric_insn.dest_mask;
+            continue;
+        }
+        // is the DST an known arg
+        int arg_extend;
+        arg_extend = 0;
+        for (unsigned int kk = 0; kk < vec_safe_length(trvec_args); kk += 1)
+        {
+            for (unsigned int ii = 0; ii < 32; ii += 1)
+            {
+            if (tric_insn.dest_op[ii] == (*trvec_args)[kk])
+            {
+      if ((TYPE_UNSIGNED(TREE_TYPE((*trvec_args)[kk])) == 1) && (tric_insn.src_qual == TRIC_INSTR_SEXTEND))
+              break;
+      if ((TYPE_UNSIGNED(TREE_TYPE((*trvec_args)[kk])) == 0) && (tric_insn.src_qual == TRIC_INSTR_ZEXTEND))
+              break;
+      if ((tric_insn.src_mask & func_args) != 0)
+      {
+              arg_extend = 1;                   // must be arg register
+              func_args &= ~tric_insn.src_mask; // mark it as processed
+      }
+      break;
+            }
+            }
+            if (arg_extend == 1)
+            break;
+        }
+        if ((arg_extend == 1))
+        {
+            if (dump_file)
+            fprintf(dump_file, "Delete Insn UID=%d - Senseless sign extension from arg Register\n", INSN_UID(insn));
+            delete_insn(insn);
+        }
+        if (func_args == 0)
+            break;
+        insn_cnt += 1;
+      }
+  }
+  return TODO_verify_all;
+}
+
+static const uint32_t crc32Table[256] = {
+        0x00000000L, 0xF26B8303L, 0xE13B70F7L, 0x1350F3F4L,
+        0xC79A971FL, 0x35F1141CL, 0x26A1E7E8L, 0xD4CA64EBL,
+        0x8AD958CFL, 0x78B2DBCCL, 0x6BE22838L, 0x9989AB3BL,
+        0x4D43CFD0L, 0xBF284CD3L, 0xAC78BF27L, 0x5E133C24L,
+        0x105EC76FL, 0xE235446CL, 0xF165B798L, 0x030E349BL,
+        0xD7C45070L, 0x25AFD373L, 0x36FF2087L, 0xC494A384L,
+        0x9A879FA0L, 0x68EC1CA3L, 0x7BBCEF57L, 0x89D76C54L,
+        0x5D1D08BFL, 0xAF768BBCL, 0xBC267848L, 0x4E4DFB4BL,
+        0x20BD8EDEL, 0xD2D60DDDL, 0xC186FE29L, 0x33ED7D2AL,
+        0xE72719C1L, 0x154C9AC2L, 0x061C6936L, 0xF477EA35L,
+        0xAA64D611L, 0x580F5512L, 0x4B5FA6E6L, 0xB93425E5L,
+        0x6DFE410EL, 0x9F95C20DL, 0x8CC531F9L, 0x7EAEB2FAL,
+        0x30E349B1L, 0xC288CAB2L, 0xD1D83946L, 0x23B3BA45L,
+        0xF779DEAEL, 0x05125DADL, 0x1642AE59L, 0xE4292D5AL,
+        0xBA3A117EL, 0x4851927DL, 0x5B016189L, 0xA96AE28AL,
+        0x7DA08661L, 0x8FCB0562L, 0x9C9BF696L, 0x6EF07595L,
+        0x417B1DBCL, 0xB3109EBFL, 0xA0406D4BL, 0x522BEE48L,
+        0x86E18AA3L, 0x748A09A0L, 0x67DAFA54L, 0x95B17957L,
+        0xCBA24573L, 0x39C9C670L, 0x2A993584L, 0xD8F2B687L,
+        0x0C38D26CL, 0xFE53516FL, 0xED03A29BL, 0x1F682198L,
+        0x5125DAD3L, 0xA34E59D0L, 0xB01EAA24L, 0x42752927L,
+        0x96BF4DCCL, 0x64D4CECFL, 0x77843D3BL, 0x85EFBE38L,
+        0xDBFC821CL, 0x2997011FL, 0x3AC7F2EBL, 0xC8AC71E8L,
+        0x1C661503L, 0xEE0D9600L, 0xFD5D65F4L, 0x0F36E6F7L,
+        0x61C69362L, 0x93AD1061L, 0x80FDE395L, 0x72966096L,
+        0xA65C047DL, 0x5437877EL, 0x4767748AL, 0xB50CF789L,
+        0xEB1FCBADL, 0x197448AEL, 0x0A24BB5AL, 0xF84F3859L,
+        0x2C855CB2L, 0xDEEEDFB1L, 0xCDBE2C45L, 0x3FD5AF46L,
+        0x7198540DL, 0x83F3D70EL, 0x90A324FAL, 0x62C8A7F9L,
+        0xB602C312L, 0x44694011L, 0x5739B3E5L, 0xA55230E6L,
+        0xFB410CC2L, 0x092A8FC1L, 0x1A7A7C35L, 0xE811FF36L,
+        0x3CDB9BDDL, 0xCEB018DEL, 0xDDE0EB2AL, 0x2F8B6829L,
+        0x82F63B78L, 0x709DB87BL, 0x63CD4B8FL, 0x91A6C88CL,
+        0x456CAC67L, 0xB7072F64L, 0xA457DC90L, 0x563C5F93L,
+        0x082F63B7L, 0xFA44E0B4L, 0xE9141340L, 0x1B7F9043L,
+        0xCFB5F4A8L, 0x3DDE77ABL, 0x2E8E845FL, 0xDCE5075CL,
+        0x92A8FC17L, 0x60C37F14L, 0x73938CE0L, 0x81F80FE3L,
+        0x55326B08L, 0xA759E80BL, 0xB4091BFFL, 0x466298FCL,
+        0x1871A4D8L, 0xEA1A27DBL, 0xF94AD42FL, 0x0B21572CL,
+        0xDFEB33C7L, 0x2D80B0C4L, 0x3ED04330L, 0xCCBBC033L,
+        0xA24BB5A6L, 0x502036A5L, 0x4370C551L, 0xB11B4652L,
+        0x65D122B9L, 0x97BAA1BAL, 0x84EA524EL, 0x7681D14DL,
+        0x2892ED69L, 0xDAF96E6AL, 0xC9A99D9EL, 0x3BC21E9DL,
+        0xEF087A76L, 0x1D63F975L, 0x0E330A81L, 0xFC588982L,
+        0xB21572C9L, 0x407EF1CAL, 0x532E023EL, 0xA145813DL,
+        0x758FE5D6L, 0x87E466D5L, 0x94B49521L, 0x66DF1622L,
+        0x38CC2A06L, 0xCAA7A905L, 0xD9F75AF1L, 0x2B9CD9F2L,
+        0xFF56BD19L, 0x0D3D3E1AL, 0x1E6DCDEEL, 0xEC064EEDL,
+        0xC38D26C4L, 0x31E6A5C7L, 0x22B65633L, 0xD0DDD530L,
+        0x0417B1DBL, 0xF67C32D8L, 0xE52CC12CL, 0x1747422FL,
+        0x49547E0BL, 0xBB3FFD08L, 0xA86F0EFCL, 0x5A048DFFL,
+        0x8ECEE914L, 0x7CA56A17L, 0x6FF599E3L, 0x9D9E1AE0L,
+        0xD3D3E1ABL, 0x21B862A8L, 0x32E8915CL, 0xC083125FL,
+        0x144976B4L, 0xE622F5B7L, 0xF5720643L, 0x07198540L,
+        0x590AB964L, 0xAB613A67L, 0xB831C993L, 0x4A5A4A90L,
+        0x9E902E7BL, 0x6CFBAD78L, 0x7FAB5E8CL, 0x8DC0DD8FL,
+        0xE330A81AL, 0x115B2B19L, 0x020BD8EDL, 0xF0605BEEL,
+        0x24AA3F05L, 0xD6C1BC06L, 0xC5914FF2L, 0x37FACCF1L,
+        0x69E9F0D5L, 0x9B8273D6L, 0x88D28022L, 0x7AB90321L,
+        0xAE7367CAL, 0x5C18E4C9L, 0x4F48173DL, 0xBD23943EL,
+        0xF36E6F75L, 0x0105EC76L, 0x12551F82L, 0xE03E9C81L,
+        0x34F4F86AL, 0xC69F7B69L, 0xD5CF889DL, 0x27A40B9EL,
+        0x79B737BAL, 0x8BDCB4B9L, 0x988C474DL, 0x6AE7C44EL,
+        0xBE2DA0A5L, 0x4C4623A6L, 0x5F16D052L, 0xAD7D5351L
+};
+
+static uint32_t
+tric_singletable_crc32c(uint32_t crc, char *buf, size_t size)
+{
+        char *p = buf;
+
+
+        while (size--)
+                crc = crc32Table[(crc ^ *p++) & 0xff] ^ (crc >> 8);
+
+        return crc;
+}
+
+static unsigned int queue (dump_info_sign_p, const_tree, int);
+static void dump_index (dump_info_sign_p, unsigned int);
+static void dequeue_and_dump (dump_info_sign_p);
+static void dump_new_line (dump_info_sign_p);
+static void dump_maybe_newline (dump_info_sign_p);
+
+/* Dump the CHILD and its children.  */
+#define dump_child_sign(field, child) \
+  queue_and_dump_index_sign (di, field, child, DUMP_NONE)
+
+static void dump_pointer_sign (dump_info_sign_p, const char *, void *);
+static void dump_int_sign (dump_info_sign_p, const char *, int);
+static void dump_string_field_sign (dump_info_sign_p, const char *, const char *);
+static void queue_and_dump_index_sign (dump_info_sign_p, const char *, const_tree, int);
+static void queue_and_dump_type_sign (dump_info_sign_p, const_tree);
+static int dump_flag_sign (dump_info_sign_p, dump_flags_t, const_tree);
+
+
+static int fprintf_sign(dump_info_sign_p, const char *format, ...);
+
+static void
+print_decs_sign (dump_info_sign_p di, const wide_int_ref &wi)
+{
+  char buf[WIDE_INT_PRINT_BUFFER_SIZE];
+  print_decs (wi, buf);
+  fprintf_sign(di,"%s",buf);
+}
+
+
+static int fprintf_sign(dump_info_sign_p di, const char *format, ...)
+{
+#define TRIC_SIGN_MALLOC 1024
+  va_list ap;
+  int ret;
+  int max_avail;
+  if (di->buf==NULL)
+    {
+      di->buf=(char *) xmalloc(TRIC_SIGN_MALLOC);
+      di->buf_max=TRIC_SIGN_MALLOC;
+      di->buf_len=0;
+//      fprintf(stdout,"Initial XMALLOC %8.8x len=%d max=%d\n",&di->buf[0],di->buf_len,di->buf_max);
+    }
+  max_avail=di->buf_max-di->buf_len;
+  if (max_avail<(TRIC_SIGN_MALLOC>>1))
+    {
+      di->buf=(char *) xrealloc(di->buf,di->buf_max+TRIC_SIGN_MALLOC);
+      di->buf_max+=TRIC_SIGN_MALLOC;
+      max_avail+=TRIC_SIGN_MALLOC;
+//      fprintf(stdout,"Realloc half XMALLOC %8.8x len=%d max=%d\n",&di->buf[0],di->buf_len,di->buf_max);
+    }
+
+  va_start (ap, format);
+  ret=vsnprintf( &di->buf[di->buf_len], max_avail, format, ap);
+  va_end (ap);
+  if (ret>=max_avail)
+    {
+      //buffer is not sufficient
+      di->buf=(char *) xrealloc(di->buf,di->buf_max+((ret/TRIC_SIGN_MALLOC)+1)*TRIC_SIGN_MALLOC);
+      di->buf_max+=((ret/TRIC_SIGN_MALLOC)+1)*TRIC_SIGN_MALLOC;
+//      fprintf(stdout,"Realloc vsnprinft XMALLOC %8.8x ret=%d max_avail=%d len=%d max=%d resize=%d\n",&di->buf[0],ret,max_avail,di->buf_len,di->buf_max,((ret/TRIC_SIGN_MALLOC)+1)*TRIC_SIGN_MALLOC);
+      va_start (ap, format);
+      ret=vsprintf(&di->buf[di->buf_len], format, ap );
+      va_end (ap);
+    }
+  di->buf_len+=ret;
+//  fprintf(stdout,"Printed Bytes %d\n",ret);
+  return ret;
+}
+/* Add T to the end of the queue of nodes to dump.  Returns the index
+   assigned to T.  */
+
+static unsigned int
+queue (dump_info_sign_p di, const_tree t, int flags)
+{
+  dump_queue_p dq;
+  dump_node_info_p dni;
+  unsigned int index;
+
+  /* Assign the next available index to T.  */
+  index = ++di->index;
+
+  /* Obtain a new queue node.  */
+  if (di->free_list)
+    {
+      dq = di->free_list;
+      di->free_list = dq->next;
+    }
+  else
+    dq = XNEW (struct dump_queue);
+
+  /* Create a new entry in the splay-tree.  */
+  dni = XNEW (struct dump_node_info);
+  dni->index = index;
+  dni->binfo_p = ((flags & DUMP_BINFO) != 0);
+  dq->node = splay_tree_insert (di->nodes, (splay_tree_key) t,
+                                (splay_tree_value) dni);
+
+  /* Add it to the end of the queue.  */
+  dq->next = 0;
+  if (!di->queue_end)
+    di->queue = dq;
+  else
+    di->queue_end->next = dq;
+  di->queue_end = dq;
+
+  /* Return the index.  */
+  return index;
+}
+
+static void
+dump_index (dump_info_sign_p di, unsigned int index)
+{
+  fprintf_sign (di, "@%-6u ", index);
+  di->column += 8;
+}
+
+/* If T has not already been output, queue it for subsequent output.
+   FIELD is a string to print before printing the index.  Then, the
+   index of T is printed.  */
+
+static void
+queue_and_dump_index_sign (dump_info_sign_p di, const char *field, const_tree t, int flags)
+{
+  unsigned int index;
+  splay_tree_node n;
+
+  /* If there's no node, just return.  This makes for fewer checks in
+     our callers.  */
+  if (!t)
+    return;
+
+  /* See if we've already queued or dumped this node.  */
+  n = splay_tree_lookup (di->nodes, (splay_tree_key) t);
+  if (n)
+    index = ((dump_node_info_p) n->value)->index;
+  else
+    /* If we haven't, add it to the queue.  */
+    {
+//      enum tree_code code = TREE_CODE (t);
+//      if (code==DEBUG_EXPR_DECL) return;
+//      if (code==DEBUG_BEGIN_STMT) return;
+      index = queue (di, t, flags);
+    }
+  /* Print the index of the node.  */
+  dump_maybe_newline (di);
+  fprintf_sign (di, "%-4s: ", field);
+  di->column += 6;
+  dump_index (di, index);
+}
+
+/* Dump the type of T.  */
+
+static void
+queue_and_dump_type_sign (dump_info_sign_p di, const_tree t)
+{
+  queue_and_dump_index_sign (di, "type", TREE_TYPE (t), DUMP_NONE);
+}
+
+/* Dump column control */
+#define SOL_COLUMN 25           /* Start of line column.  */
+#define EOL_COLUMN 55           /* End of line column.  */
+#define COLUMN_ALIGNMENT 15     /* Alignment.  */
+
+/* Insert a new line in the dump output, and indent to an appropriate
+   place to start printing more fields.  */
+
+static void
+dump_new_line (dump_info_sign_p di)
+{
+  fprintf_sign (di, "\n%*s", SOL_COLUMN, "");
+  di->column = SOL_COLUMN;
+}
+
+/* If necessary, insert a new line.  */
+
+static void
+dump_maybe_newline (dump_info_sign_p di)
+{
+  int extra;
+
+  /* See if we need a new line.  */
+  if (di->column > EOL_COLUMN)
+    dump_new_line (di);
+  /* See if we need any padding.  */
+  else if ((extra = (di->column - SOL_COLUMN) % COLUMN_ALIGNMENT) != 0)
+    {
+      fprintf_sign (di, "%*s", COLUMN_ALIGNMENT - extra, "");
+      di->column += COLUMN_ALIGNMENT - extra;
+    }
+}
+
+/* Dump pointer PTR using FIELD to identify it.  */
+
+static void
+dump_pointer_sign (dump_info_sign_p di, const char *field, void *ptr)
+{
+  dump_maybe_newline (di);
+  fprintf_sign (di, "%-4s: %-8" HOST_WIDE_INT_PRINT "x ", field,
+           (unsigned HOST_WIDE_INT) (uintptr_t) ptr);
+  di->column += 15;
+}
+
+/* Dump integer I using FIELD to identify it.  */
+
+static void
+dump_int_sign (dump_info_sign_p di, const char *field, int i)
+{
+  dump_maybe_newline (di);
+  fprintf_sign (di, "%-4s: %-7d ", field, i);
+  di->column += 14;
+}
+
+/* Dump the floating point value R, using FIELD to identify it.  */
+
+static void
+dump_real (dump_info_sign_p di, const char *field, const REAL_VALUE_TYPE *r)
+{
+  char buf[32];
+  real_to_decimal (buf, r, sizeof (buf), 0, true);
+  dump_maybe_newline (di);
+  fprintf_sign (di, "%-4s: %s ", field, buf);
+  di->column += strlen (buf) + 7;
+}
+
+/* Dump the fixed-point value F, using FIELD to identify it.  */
+
+static void
+dump_fixed (dump_info_sign_p di, const char *field, const FIXED_VALUE_TYPE *f)
+{
+  char buf[32];
+  fixed_to_decimal (buf, f, sizeof (buf));
+  dump_maybe_newline (di);
+  fprintf_sign (di, "%-4s: %s ", field, buf);
+  di->column += strlen (buf) + 7;
+}
+
+
+/* Dump the string field S.  */
+
+static void
+dump_string_field_sign (dump_info_sign_p di, const char *field, const char *string)
+{
+  dump_maybe_newline (di);
+  fprintf_sign (di, "%-4s: %-7s ", field, string);
+  if (strlen (string) > 7)
+    di->column += 6 + strlen (string) + 1;
+  else
+    di->column += 14;
+}
+
+/* Dump the next node in the queue.  */
+
+static void
+dequeue_and_dump (dump_info_sign_p di)
+{
+  dump_queue_p dq;
+  splay_tree_node stn;
+  dump_node_info_p dni;
+  tree t;
+  unsigned int index;
+  enum tree_code code;
+  enum tree_code_class code_class;
+  const char* code_name;
+
+  /* Get the next node from the queue.  */
+  dq = di->queue;
+  stn = dq->node;
+  t = (tree) stn->key;
+  dni = (dump_node_info_p) stn->value;
+  index = dni->index;
+
+  /* Remove the node from the queue, and put it on the free list.  */
+  di->queue = dq->next;
+  if (!di->queue)
+    di->queue_end = 0;
+  dq->next = di->free_list;
+  di->free_list = dq;
+
+  /* Print the node index.  */
+  dump_index (di, index);
+  /* And the type of node this is.  */
+  if (dni->binfo_p)
+    code_name = "binfo";
+  else
+    code_name = get_tree_code_name (TREE_CODE (t));
+  fprintf_sign (di, "%-16s ", code_name);
+  di->column = 25;
+
+  /* Figure out what kind of node this is.  */
+  code = TREE_CODE (t);
+  code_class = TREE_CODE_CLASS (code);
+
+  /* Although BINFOs are TREE_VECs, we dump them specially so as to be
+     more informative.  */
+  if (dni->binfo_p)
+    {
+      unsigned ix;
+      tree base;
+      vec<tree, va_gc> *accesses = BINFO_BASE_ACCESSES (t);
+
+      dump_child_sign ("type", BINFO_TYPE (t));
+
+      if (BINFO_VIRTUAL_P (t))
+        dump_string_field_sign (di, "spec", "virt");
+
+      dump_int_sign (di, "bases", BINFO_N_BASE_BINFOS (t));
+      for (ix = 0; BINFO_BASE_ITERATE (t, ix, base); ix++)
+        {
+          tree access = (accesses ? (*accesses)[ix] : access_public_node);
+          const char *string = NULL;
+
+          if (access == access_public_node)
+            string = "pub";
+          else if (access == access_protected_node)
+            string = "prot";
+          else if (access == access_private_node)
+            string = "priv";
+          else
+            gcc_unreachable ();
+
+          dump_string_field_sign (di, "accs", string);
+          queue_and_dump_index_sign (di, "binf", base, DUMP_BINFO);
+        }
+
+      goto done;
+    }
+
+  /* We can knock off a bunch of expression nodes in exactly the same
+     way.  */
+  if (IS_EXPR_CODE_CLASS (code_class))
+    {
+      /* If we're dumping children, dump them now.  */
+      queue_and_dump_type_sign (di, t);
+
+      switch (code_class)
+        {
+        case tcc_unary:
+          dump_child_sign ("op 0", TREE_OPERAND (t, 0));
+          break;
+
+        case tcc_binary:
+        case tcc_comparison:
+          dump_child_sign ("op 0", TREE_OPERAND (t, 0));
+          dump_child_sign ("op 1", TREE_OPERAND (t, 1));
+          break;
+
+        case tcc_expression:
+        case tcc_reference:
+        case tcc_statement:
+        case tcc_vl_exp:
+          /* These nodes are handled explicitly below.  */
+          break;
+
+        default:
+          gcc_unreachable ();
+        }
+    }
+  else if (DECL_P (t))
+    {
+      expanded_location xloc;
+      /* All declarations have names.  */
+      if (DECL_NAME (t))
+        dump_child_sign ("name", DECL_NAME (t));
+      if (HAS_DECL_ASSEMBLER_NAME_P (t)
+          && DECL_ASSEMBLER_NAME_SET_P (t)
+          && DECL_ASSEMBLER_NAME (t) != DECL_NAME (t))
+        dump_child_sign ("mngl", DECL_ASSEMBLER_NAME (t));
+      if (DECL_ABSTRACT_ORIGIN (t))
+        dump_child_sign ("orig", DECL_ABSTRACT_ORIGIN (t));
+      /* And types.  */
+      queue_and_dump_type_sign (di, t);
+      dump_child_sign ("scpe", DECL_CONTEXT (t));
+      /* And a source position.  */
+      xloc = expand_location (DECL_SOURCE_LOCATION (t));
+      if (xloc.file)
+        {
+//        const char *filename = lbasename (xloc.file);
+          dump_maybe_newline (di);
+          //fprintf (di->stream, "srcp: %s:%-6d ", filename,xloc.line);
+          //di->column += 6 + strlen (filename) + 8;
+          di->column += 6 + 0 + 8;
+        }
+      /* And any declaration can be compiler-generated.  */
+      if (CODE_CONTAINS_STRUCT (TREE_CODE (t), TS_DECL_COMMON)
+          && DECL_ARTIFICIAL (t))
+        dump_string_field_sign (di, "note", "artificial");
+      if (DECL_CHAIN (t) && !dump_flag_sign (di, TDF_SLIM, NULL))
+        dump_child_sign ("chain", DECL_CHAIN (t));
+    }
+  else if (code_class == tcc_type)
+    {
+      /* All types have qualifiers.  */
+      int quals = lang_hooks.tree_dump.type_quals (t);
+
+      if (quals != TYPE_UNQUALIFIED)
+        {
+          fprintf_sign (di, "qual: %c%c%c     ",
+                   (quals & TYPE_QUAL_CONST) ? 'c' : ' ',
+                   (quals & TYPE_QUAL_VOLATILE) ? 'v' : ' ',
+                   (quals & TYPE_QUAL_RESTRICT) ? 'r' : ' ');
+          di->column += 14;
+        }
+
+      /* All types have associated declarations.  */
+      dump_child_sign ("name", TYPE_NAME (t));
+
+      /* All types have a main variant.  */
+      if (TYPE_MAIN_VARIANT (t) != t)
+        dump_child_sign ("unql", TYPE_MAIN_VARIANT (t));
+
+      /* And sizes.  */
+      dump_child_sign ("size", TYPE_SIZE (t));
+
+      /* All types have alignments.  */
+      dump_int_sign (di, "algn", TYPE_ALIGN (t));
+    }
+  else if (code_class == tcc_constant)
+    /* All constants can have types.  */
+    queue_and_dump_type_sign (di, t);
+
+  /* Give the language-specific code a chance to print something.  If
+     it's completely taken care of things, don't bother printing
+     anything more ourselves.  */
+//  if (lang_hooks.tree_dump.dump_tree (di, t))
+//    goto done;
+
+  /* Now handle the various kinds of nodes.  */
+  switch (code)
+    {
+      int i;
+
+    case IDENTIFIER_NODE:
+      //dump_string_field_sign (di, "strg", IDENTIFIER_POINTER (t));
+      //dump_int_sign (di, "lngt", IDENTIFIER_LENGTH (t));
+      break;
+
+    case TREE_LIST:
+      dump_child_sign ("purp", TREE_PURPOSE (t));
+      dump_child_sign ("valu", TREE_VALUE (t));
+      dump_child_sign ("chan", TREE_CHAIN (t));
+      break;
+
+    case STATEMENT_LIST:
+      {
+        tree_stmt_iterator it;
+        for (i = 0, it = tsi_start (t); !tsi_end_p (it); tsi_next (&it) )
+          {
+            char buffer[32];
+//          tree_code code = TREE_CODE ( tsi_stmt (it));
+//          if ((code!=DEBUG_EXPR_DECL) && (code!=DEBUG_BEGIN_STMT))
+                {
+                sprintf (buffer, "%u", i);
+                dump_child_sign (buffer, tsi_stmt (it));
+                i++;
+                }
+          }
+      }
+      break;
+
+    case TREE_VEC:
+      dump_int_sign (di, "lngt", TREE_VEC_LENGTH (t));
+      for (i = 0; i < TREE_VEC_LENGTH (t); ++i)
+        {
+          char buffer[32];
+          sprintf (buffer, "%u", i);
+          dump_child_sign (buffer, TREE_VEC_ELT (t, i));
+        }
+      break;
+
+    case INTEGER_TYPE:
+    case ENUMERAL_TYPE:
+      dump_int_sign (di, "prec", TYPE_PRECISION (t));
+      dump_string_field_sign (di, "sign", TYPE_UNSIGNED (t) ? "unsigned": "signed");
+      dump_child_sign ("min", TYPE_MIN_VALUE (t));
+      dump_child_sign ("max", TYPE_MAX_VALUE (t));
+
+      if (code == ENUMERAL_TYPE)
+        dump_child_sign ("csts", TYPE_VALUES (t));
+      break;
+
+    case REAL_TYPE:
+      dump_int_sign (di, "prec", TYPE_PRECISION (t));
+      break;
+
+    case FIXED_POINT_TYPE:
+      dump_int_sign (di, "prec", TYPE_PRECISION (t));
+      dump_string_field_sign (di, "sign", TYPE_UNSIGNED (t) ? "unsigned": "signed");
+      dump_string_field_sign (di, "saturating",
+                         TYPE_SATURATING (t) ? "saturating": "non-saturating");
+      break;
+
+    case POINTER_TYPE:
+      dump_child_sign ("ptd", TREE_TYPE (t));
+      break;
+
+    case REFERENCE_TYPE:
+      dump_child_sign ("refd", TREE_TYPE (t));
+      break;
+
+    case METHOD_TYPE:
+      dump_child_sign ("clas", TYPE_METHOD_BASETYPE (t));
+      /* Fall through.  */
+
+    case FUNCTION_TYPE:
+      dump_child_sign ("retn", TREE_TYPE (t));
+      dump_child_sign ("prms", TYPE_ARG_TYPES (t));
+      break;
+
+    case ARRAY_TYPE:
+      dump_child_sign ("elts", TREE_TYPE (t));
+      dump_child_sign ("domn", TYPE_DOMAIN (t));
+      break;
+
+    case RECORD_TYPE:
+    case UNION_TYPE:
+      if (TREE_CODE (t) == RECORD_TYPE)
+        dump_string_field_sign (di, "tag", "struct");
+      else
+        dump_string_field_sign (di, "tag", "union");
+
+      dump_child_sign ("flds", TYPE_FIELDS (t));
+      queue_and_dump_index_sign (di, "binf", TYPE_BINFO (t),
+                            DUMP_BINFO);
+      break;
+
+    case CONST_DECL:
+      dump_child_sign ("cnst", DECL_INITIAL (t));
+      break;
+
+    case DEBUG_EXPR_DECL:
+      dump_int_sign (di, "-uid", DEBUG_TEMP_UID (t));
+      /* Fall through.  */
+
+    case VAR_DECL:
+    case PARM_DECL:
+    case FIELD_DECL:
+    case RESULT_DECL:
+      if (TREE_CODE (t) == PARM_DECL)
+        dump_child_sign ("argt", DECL_ARG_TYPE (t));
+      else
+        dump_child_sign ("init", DECL_INITIAL (t));
+      dump_child_sign ("size", DECL_SIZE (t));
+      dump_int_sign (di, "algn", DECL_ALIGN (t));
+
+      if (TREE_CODE (t) == FIELD_DECL)
+        {
+          if (DECL_FIELD_OFFSET (t))
+            dump_child_sign ("bpos", bit_position (t));
+        }
+      else if (VAR_P (t) || TREE_CODE (t) == PARM_DECL)
+        {
+          dump_int_sign (di, "used", TREE_USED (t));
+          if (DECL_REGISTER (t))
+            dump_string_field_sign (di, "spec", "register");
+        }
+      break;
+
+    case FUNCTION_DECL:
+      dump_child_sign ("args", DECL_ARGUMENTS (t));
+//      if (DECL_EXTERNAL (t))
+//      dump_string_field_sign (di, "body", "undefined");
+//      if (TREE_PUBLIC (t))
+//      dump_string_field_sign (di, "link", "extern");
+//      else
+//      dump_string_field_sign (di, "link", "static");
+      if (DECL_SAVED_TREE (t) && !dump_flag_sign (di, TDF_SLIM, t))
+        dump_child_sign ("body", DECL_SAVED_TREE (t));
+      break;
+
+    case INTEGER_CST:
+      fprintf_sign (di, "int: ");
+      print_decs_sign (di, wi::to_wide (t));
+      break;
+
+    case STRING_CST:
+      fprintf_sign (di, "strg: %-7s ", TREE_STRING_POINTER (t));
+      dump_int_sign (di, "lngt", TREE_STRING_LENGTH (t));
+      break;
+
+    case REAL_CST:
+      dump_real (di, "valu", TREE_REAL_CST_PTR (t));
+      break;
+
+    case FIXED_CST:
+      dump_fixed (di, "valu", TREE_FIXED_CST_PTR (t));
+      break;
+
+    case TRUTH_NOT_EXPR:
+    case ADDR_EXPR:
+    case INDIRECT_REF:
+    case CLEANUP_POINT_EXPR:
+    case SAVE_EXPR:
+    case REALPART_EXPR:
+    case IMAGPART_EXPR:
+      /* These nodes are unary, but do not have code class `1'.  */
+      dump_child_sign ("op 0", TREE_OPERAND (t, 0));
+      break;
+
+    case TRUTH_ANDIF_EXPR:
+    case TRUTH_ORIF_EXPR:
+    case INIT_EXPR:
+    case MODIFY_EXPR:
+    case COMPOUND_EXPR:
+    case PREDECREMENT_EXPR:
+    case PREINCREMENT_EXPR:
+    case POSTDECREMENT_EXPR:
+    case POSTINCREMENT_EXPR:
+      /* These nodes are binary, but do not have code class `2'.  */
+      dump_child_sign ("op 0", TREE_OPERAND (t, 0));
+      dump_child_sign ("op 1", TREE_OPERAND (t, 1));
+      break;
+
+    case COMPONENT_REF:
+    case BIT_FIELD_REF:
+      dump_child_sign ("op 0", TREE_OPERAND (t, 0));
+      dump_child_sign ("op 1", TREE_OPERAND (t, 1));
+      dump_child_sign ("op 2", TREE_OPERAND (t, 2));
+      break;
+
+    case ARRAY_REF:
+    case ARRAY_RANGE_REF:
+      dump_child_sign ("op 0", TREE_OPERAND (t, 0));
+      dump_child_sign ("op 1", TREE_OPERAND (t, 1));
+      dump_child_sign ("op 2", TREE_OPERAND (t, 2));
+      dump_child_sign ("op 3", TREE_OPERAND (t, 3));
+      break;
+
+    case COND_EXPR:
+      dump_child_sign ("op 0", TREE_OPERAND (t, 0));
+      dump_child_sign ("op 1", TREE_OPERAND (t, 1));
+      dump_child_sign ("op 2", TREE_OPERAND (t, 2));
+      break;
+
+    case TRY_FINALLY_EXPR:
+      dump_child_sign ("op 0", TREE_OPERAND (t, 0));
+      dump_child_sign ("op 1", TREE_OPERAND (t, 1));
+      break;
+
+    case CALL_EXPR:
+      {
+        int i = 0;
+        tree arg;
+        call_expr_arg_iterator iter;
+        dump_child_sign ("fn", CALL_EXPR_FN (t));
+        FOR_EACH_CALL_EXPR_ARG (arg, iter, t)
+          {
+            char buffer[32];
+            sprintf (buffer, "%u", i);
+            dump_child_sign (buffer, arg);
+            i++;
+          }
+      }
+      break;
+
+    case CONSTRUCTOR:
+      {
+        unsigned HOST_WIDE_INT cnt;
+        tree index, value;
+        dump_int_sign (di, "lngt", CONSTRUCTOR_NELTS (t));
+        FOR_EACH_CONSTRUCTOR_ELT (CONSTRUCTOR_ELTS (t), cnt, index, value)
+          {
+            dump_child_sign ("idx", index);
+            dump_child_sign ("val", value);
+          }
+      }
+      break;
+
+    case BIND_EXPR:
+      dump_child_sign ("vars", TREE_OPERAND (t, 0));
+      dump_child_sign ("body", TREE_OPERAND (t, 1));
+      break;
+
+    case LOOP_EXPR:
+      dump_child_sign ("body", TREE_OPERAND (t, 0));
+      break;
+
+    case EXIT_EXPR:
+      dump_child_sign ("cond", TREE_OPERAND (t, 0));
+      break;
+
+    case RETURN_EXPR:
+      dump_child_sign ("expr", TREE_OPERAND (t, 0));
+      break;
+
+    case TARGET_EXPR:
+      dump_child_sign ("decl", TREE_OPERAND (t, 0));
+      dump_child_sign ("init", TREE_OPERAND (t, 1));
+      dump_child_sign ("clnp", TREE_OPERAND (t, 2));
+      /* There really are two possible places the initializer can be.
+         After RTL expansion, the second operand is moved to the
+         position of the fourth operand, and the second operand
+         becomes NULL.  */
+      dump_child_sign ("init", TREE_OPERAND (t, 3));
+      break;
+
+    case CASE_LABEL_EXPR:
+      dump_child_sign ("name", CASE_LABEL (t));
+      if (CASE_LOW (t))
+        {
+          dump_child_sign ("low ", CASE_LOW (t));
+          if (CASE_HIGH (t))
+            dump_child_sign ("high", CASE_HIGH (t));
+        }
+      break;
+    case LABEL_EXPR:
+      dump_child_sign ("name", TREE_OPERAND (t,0));
+      break;
+    case GOTO_EXPR:
+      dump_child_sign ("labl", TREE_OPERAND (t, 0));
+      break;
+    case SWITCH_EXPR:
+      dump_child_sign ("cond", TREE_OPERAND (t, 0));
+      dump_child_sign ("body", TREE_OPERAND (t, 1));
+      break;
+    case OMP_CLAUSE:
+      {
+        int i;
+        fprintf_sign (di, "%s\n", omp_clause_code_name[OMP_CLAUSE_CODE (t)]);
+        for (i = 0; i < omp_clause_num_ops[OMP_CLAUSE_CODE (t)]; i++)
+          dump_child_sign ("op: ", OMP_CLAUSE_OPERAND (t, i));
+      }
+      break;
+    default:
+      /* There are no additional fields to print.  */
+      break;
+    }
+
+ done:
+  if (dump_flag_sign (di, TDF_ADDRESS, NULL))
+    dump_pointer_sign (di, "addr", (void *)t);
+
+  /* Terminate the line.  */
+  fprintf_sign (di, "\n");
+}
+
+/* Return nonzero if FLAG has been specified for the dump, and NODE
+   is not the root node of the dump.  */
+
+static int dump_flag_sign (dump_info_sign_p di, dump_flags_t flag, const_tree node)
+{
+  return (di->flags & flag) && (node != di->node);
+}
+
+/* Dump T, and all its children, on STREAM.  */
+
+void
+dump_node_sign (const_tree t, dump_flags_t flags, char **buf, int *buf_len, int *alloc_size)
+{
+  struct dump_info_sign di;
+  dump_queue_p dq;
+  dump_queue_p next_dq;
+
+  /* Initialize the dump-information structure.  */
+  di.buf=*buf; //buf_len and buf_max will be set with first fprintf_sign and di.buf is equal 0
+  di.buf_len=*buf_len;
+  di.buf_max=*alloc_size;
+  di.index = 0;
+  di.column = 0;
+  di.queue = 0;
+  di.queue_end = 0;
+  di.free_list = 0;
+  di.flags = flags;
+  di.node = t;
+  di.nodes = splay_tree_new (splay_tree_compare_pointers, 0,
+                             splay_tree_delete_pointers);
+
+  /* Queue up the first node.  */
+  queue (&di, t, DUMP_NONE);
+
+  /* Until the queue is empty, keep dumping nodes.  */
+  while (di.queue)
+    dequeue_and_dump (&di);
+
+  /* Now, clean up.  */
+  for (dq = di.free_list; dq; dq = next_dq)
+    {
+      next_dq = dq->next;
+      free (dq);
+    }
+  splay_tree_delete (di.nodes);
+  fprintf_sign (&di, "\n");
+  *buf_len=di.buf_len;
+  *buf=di.buf;
+  *alloc_size=di.buf_max;
+}
+
+
+void
+tric_pregen_crc (tree fndecl,char **buf, int *buf_len, int *alloc_size)
+{
+  dump_flags_t local_dump_flags;
+  struct cgraph_node *cgn;
+  local_dump_flags=TDF_RAW;
+  dump_node_sign (DECL_SAVED_TREE (fndecl),
+		    TDF_SLIM | local_dump_flags, buf, buf_len, alloc_size);
+
+  /* Dump all nested functions now.  */
+  cgn = cgraph_node::get_create (fndecl);
+
+  if (nested_function_info::get (cgn))
+    for (cgn = nested_function_info::get (cgn)->nested; cgn ; cgn = nested_function_info::get (cgn)->next_nested)
+      tric_pregen_crc (cgn->decl, buf, buf_len, alloc_size);
+}
+
+bool
+tric_promote_prototypes (const_tree fntype ATTRIBUTE_UNUSED)
+{
+  if (current_function_decl==NULL) return false;
+  if (DECL_SAVED_TREE (current_function_decl)==NULL_TREE) return false;
+  if (cfun==NULL) return false;
+  if (cfun->machine==NULL) return false;
+  int buffer_len=0;
+  int alloc_size=0;
+  char *buffer=NULL;
+
+  tric_pregen_crc (current_function_decl,&buffer,&buffer_len, &alloc_size);
+
+  if (buffer_len>0x1B) //statementlist must be filled
+    {
+      uint32_t crc;
+      crc=tric_singletable_crc32c(0x80000000, buffer, buffer_len);
+      cfun->machine->crc_sign[0]=crc;
+      cfun->machine->crc_sign[1]=buffer_len;
+//      fprintf(stderr,"pass function name %s crc=%x len=%x\n",get_fnname_from_decl (current_function_decl),cfun->machine->crc_sign[0],cfun->machine->crc_sign[1]);
+    }
+  if (buffer!=NULL)
+    {
+      free(buffer);
+    }
+  return true;
+}
+/***********************************************************************
  ** Target Hooks
  ***********************************************************************/
 #undef  TARGET_HAVE_SPECULATION_SAFE_VALUE
@@ -11024,14 +17427,8 @@ tric_asm_file_start(void)
 #undef TARGET_FRAME_POINTER_REQUIRED
 #define TARGET_FRAME_POINTER_REQUIRED tricore_frame_pointer_required
 
-//TODO
-/*only a view architectures are using it */
-/*testsuite/gcc.c-torture/execute/20030222-1.c:16:1: internal compiler error: Max. number of generated reload insns per insn is achieved (90) */
-/*testsuite/gcc.c-torture/execute/stkalign.c fails as well */
-/*I made some investigations with real benchmark code and lra is a little be worse then without */
 #undef TARGET_LRA_P
 #define TARGET_LRA_P hook_bool_void_true
-
 
 #undef TARGET_HARD_REGNO_NREGS
 #define TARGET_HARD_REGNO_NREGS tric_hard_regno_nregs
@@ -11277,6 +17674,9 @@ tric_asm_file_start(void)
 //only the hook was added
 #undef  TARGET_HTC_SCHED_MAY_CHANGE_ADDRESS_P
 #define TARGET_HTC_SCHED_MAY_CHANGE_ADDRESS_P tric_sched_may_change_address_p
+
+#undef  TARGET_PROMOTE_PROTOTYPES
+#define TARGET_PROMOTE_PROTOTYPES tric_promote_prototypes
 
 //#undef TARGET_SCHED_FUSION_PRIORITY
 //#define TARGET_SCHED_FUSION_PRIORITY tricore_sched_fusion_priority

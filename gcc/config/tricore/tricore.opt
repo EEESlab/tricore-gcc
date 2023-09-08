@@ -107,7 +107,7 @@ Internal use only. Try to find anchors for loading compile time constants.  Defa
 
 mfuncinfo
 Target UInteger Var(tric_opt_funcinfo) Init(1)
-Generate function info in dedicated section
+Generate function info in dedicated section.
 
 mstrict-alignment
 Target UInteger Var(tric_opt_strict_alignment) Init(1)
@@ -210,3 +210,14 @@ Target Undocumented Mask(ALL_DEBUG)
 mlog=
 Target RejectNegative Joined Undocumented Var(tricore_log_details)
 
+mstrcpy-imm=
+Target Joined UInteger Var(tric_opt_flag_strcpy_imm) Init(0) 
+Perform strcpy immediate replacements optimization as builtin, default is on greater/equal -O1.
+
+mstrcmp-asm=
+Target Joined UInteger Var(tric_opt_flag_strcmp_ass) Init(0) 
+Perform strcmp asm replacements optimization as builtin, default is on greater/equal -O1.
+
+mstrcmp-imm=
+Target Joined UInteger Var(tric_opt_flag_strcmp_imm) Init(0) 
+Perform strcmp imm replacements, strcmp full replacement, default is on in greater/equal -O3.
