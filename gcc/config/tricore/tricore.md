@@ -1,5 +1,4 @@
-;;  Machine description for Infineon TriCore
-;;  Copyright 2005-2014 Free Software Foundation, Inc.
+;;  Machine description for Infineon TriCore ;;  Copyright 2005-2014 Free Software Foundation, Inc.
 ;;  Contributed by HighTec EDV
 
 ;; This file is part of GCC.
@@ -560,7 +559,7 @@
   [(set (match_operand:SF 0 "register_operand" "=d")
         (float_truncate:SF (match_operand:DF 1 "register_operand" "d")))
    (clobber (reg:SI REG_PSW))]
-  "TRIC_HAVE_DP"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   "dftof\t%0, %A1"
   [(set_attr "pipe"   "fp")
    (set_attr "length" "4")])
@@ -569,7 +568,7 @@
   [(set (match_operand:DF 0 "register_operand" "=d")
         (float_extend:DF (match_operand:SF 1 "register_operand" "d")))
    (clobber (reg:SI REG_PSW))]
-  "TRIC_HAVE_DP"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   "ftodf\t%A0, %1"
   [(set_attr "pipe"   "fp")
    (set_attr "length" "4")])
@@ -578,7 +577,7 @@
   [(set (match_operand:HF 0 "register_operand" "=d")
         (float_truncate:HF (match_operand:SF 1 "register_operand" "d")))
    (clobber (reg:SI REG_PSW))]
-  "TRIC_HAVE_HP_CONVERT"
+  "TRIC_HAVE_HP_CONVERT && TARGET_USE_FPU"
   "ftohp\t%0, %1"
   [(set_attr "pipe"   "fp")
    (set_attr "length" "4")])
@@ -587,7 +586,7 @@
   [(set (match_operand:SF 0 "register_operand" "=d")
         (float_extend:SF (match_operand:HF 1 "register_operand" "d")))
    (clobber (reg:SI REG_PSW))]
-  "TRIC_HAVE_HP_CONVERT"
+  "TRIC_HAVE_HP_CONVERT && TARGET_USE_FPU"
   "hptof\t%0, %1"
   [(set_attr "pipe"   "fp")
    (set_attr "length" "4")])
@@ -2248,7 +2247,7 @@
         (plus:SF (match_operand:SF 1 "register_operand"  "d")
                  (match_operand:SF 2 "register_operand"  "d")))
    (clobber (reg:SI REG_PSW))]
-  ""
+  "TARGET_USE_FPU"
   "add.f\t%0, %1, %2"
   [(set_attr "pipe" "fp2")])
 
@@ -2257,7 +2256,7 @@
         (plus:DF (match_operand:DF 1 "register_operand"  "d")
                  (match_operand:DF 2 "register_operand"  "d")))
    (clobber (reg:SI REG_PSW))]
-  "TRIC_HAVE_DP"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   "add.df\t%A0, %A1, %A2"
   [(set_attr "pipe" "fp2")])
 
@@ -2266,7 +2265,7 @@
         (minus:SF (match_operand:SF 1 "register_operand"  "d")
                   (match_operand:SF 2 "register_operand"  "d")))
    (clobber (reg:SI REG_PSW))]
-  ""
+  "TARGET_USE_FPU"
   "sub.f\t%0, %1, %2"
   [(set_attr "pipe" "fp2")])
 
@@ -2275,7 +2274,7 @@
         (minus:DF (match_operand:DF 1 "register_operand"  "d")
                   (match_operand:DF 2 "register_operand"  "d")))
    (clobber (reg:SI REG_PSW))]
-  "TRIC_HAVE_DP"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   "sub.df\t%A0, %A1, %A2"
   [(set_attr "pipe" "fp2")])
 
@@ -2284,7 +2283,7 @@
         (div:SF (match_operand:SF 1 "register_operand"  "d")
                 (match_operand:SF 2 "register_operand"  "d")))
    (clobber (reg:SI REG_PSW))]
-  ""
+  "TARGET_USE_FPU"
   "div.f\t%0, %1, %2"
   [(set_attr "pipe" "fpdiv")])
 
@@ -2293,7 +2292,7 @@
         (div:DF (match_operand:DF 1 "register_operand"  "d")
                 (match_operand:DF 2 "register_operand"  "d")))
    (clobber (reg:SI REG_PSW))]
-  "TRIC_HAVE_DP"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   "div.df\t%A0, %A1, %A2"
   [(set_attr "pipe" "fpdiv")])
 
@@ -2302,7 +2301,7 @@
         (mult:SF (match_operand:SF 1 "register_operand"  "d")
                  (match_operand:SF 2 "register_operand"  "d")))
    (clobber (reg:SI REG_PSW))]
-  ""
+  "TARGET_USE_FPU"
   "mul.f\t%0, %1, %2"
   [(set_attr "pipe" "fp2")])
 
@@ -2311,7 +2310,7 @@
         (mult:DF (match_operand:DF 1 "register_operand"  "d")
                  (match_operand:DF 2 "register_operand"  "d")))
    (clobber (reg:SI REG_PSW))]
-  "TRIC_HAVE_DP"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   "mul.df\t%A0, %A1, %A2"
   [(set_attr "pipe" "fp2")])
 
@@ -2331,7 +2330,7 @@
 
     if (0 == which_alternative)
       {
-       if (TRIC_18UP) return asmcode[2]; else return asmcode[which_alternative];
+       if (TRIC_18UP && TARGET_USE_FPU) return asmcode[2]; else return asmcode[which_alternative];
       }
     if (1 == which_alternative)
       {
@@ -2344,7 +2343,7 @@
 (define_insn "negdf2"
   [(set (match_operand:DF 0 "register_operand"         "=d")
         (neg:DF (match_operand:DF 1 "register_operand"  "d")))]
-  "(TRIC_HAVE_DP)"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   "neg.df\t%A0, %A1"
   [(set_attr "pipe" "fp2")])
 
@@ -2353,7 +2352,7 @@
         (smax:SF (match_operand:SF 1 "register_operand" "d")
                  (match_operand:SF 2 "register_operand" "d")))
   (clobber (reg:SI REG_PSW))]
-  "(TRIC_18UP)"
+  "(TRIC_18UP && TARGET_USE_FPU)"
   "max.f %0,%1,%2"
   [(set_attr "pipe" "fp2")])
 
@@ -2372,7 +2371,7 @@
                              (const_int 0))
                          (match_dup 1)
                          (match_dup 2)))]
-  ""
+  "TARGET_USE_FPU"
   {
    if (TRIC_18UP)
       {
@@ -2392,7 +2391,7 @@
         (smax:DF (match_operand:DF 1 "register_operand" "d")
                  (match_operand:DF 2 "register_operand" "d")))
   (clobber (reg:SI REG_PSW))]
-  "(TRIC_HAVE_DP)"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   "max.df %A0,%A1,%A2"
   [(set_attr "pipe" "fp2")])
 
@@ -2401,7 +2400,7 @@
 	(smin:SF (match_operand:SF 1 "register_operand" "d")
 		 (match_operand:SF 2 "register_operand" "d")))
    (clobber (reg:SI REG_PSW))]
-  "(TRIC_18UP)"
+  "(TRIC_18UP && TARGET_USE_FPU)"
   "min.f %0,%1,%2"
   [(set_attr "pipe" "fp2")])
 
@@ -2420,8 +2419,9 @@
                              (const_int 0))
                          (match_dup 1)
                          (match_dup 2)))]
-  ""
+  "TARGET_USE_FPU"
   {
+	
    if (TRIC_18UP)
       {
         emit_insn (gen_sminsf3_insn (operands[0], operands[1],operands[2]));
@@ -2439,7 +2439,7 @@
 	(smin:DF (match_operand:DF 1 "register_operand" "d")
 		 (match_operand:DF 2 "register_operand" "d")))
    (clobber (reg:SI REG_PSW))]
-  "(TRIC_HAVE_DP)"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   "min.df %A0,%A1,%A2"
   [(set_attr "pipe" "fp2")])
 
@@ -2481,7 +2481,7 @@
         (unspec:SI [(match_operand:SF 1 "register_operand"  "d")
                     (match_operand:SF 2 "register_operand"  "d")] UNSPEC_CMP_F))
    (clobber (reg:SI REG_PSW))]
-  ""
+  "TARGET_USE_FPU"
   "cmp.f\t%0, %1, %2"
   [(set_attr "pipe" "fp")])
 
@@ -2490,7 +2490,7 @@
         (unspec:SI [(match_operand:DF 1 "register_operand"  "d")
                     (match_operand:DF 2 "register_operand"  "d")] UNSPEC_CMP_DF))
    (clobber (reg:SI REG_PSW))]
-  "(TRIC_HAVE_DP)"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   "cmp.df\t%0, %A1, %A2"
   [(set_attr "pipe" "fp")])
   
@@ -2498,7 +2498,7 @@
   [(set (match_operand:SF 0 "register_operand"          "=d")
         (float:SF (match_operand:SI 1 "register_operand" "d")))
    (clobber (reg:SI REG_PSW))]
-  ""
+  "TARGET_USE_FPU"
   "itof\t%0, %1"
   [(set_attr "pipe" "fp2")])
 
@@ -2506,7 +2506,7 @@
   [(set (match_operand:DF 0 "register_operand"          "=d")
         (float:DF (match_operand:SI 1 "register_operand" "d")))
    (clobber (reg:SI REG_PSW))]
-  "(TRIC_HAVE_DP)"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   "itodf\t%A0, %1"
   [(set_attr "pipe" "fp2")])
 
@@ -2514,7 +2514,7 @@
   [(set (match_operand:DF 0 "register_operand"          "=d")
         (float:DF (match_operand:DI 1 "register_operand" "d")))
    (clobber (reg:SI REG_PSW))]
-  "(TRIC_HAVE_DP)"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   "ltodf\t%A0, %A1"
   [(set_attr "pipe" "fp2")])
 
@@ -2522,7 +2522,7 @@
   [(set (match_operand:SF 0 "register_operand"                   "=d")
         (unsigned_float:SF (match_operand:SI 1 "register_operand" "d")))
    (clobber (reg:SI REG_PSW))]
-  ""
+  "TARGET_USE_FPU"
   "utof\t%0, %1"
   [(set_attr "pipe" "fp2")])
 
@@ -2530,7 +2530,7 @@
   [(set (match_operand:DF 0 "register_operand"                   "=d")
         (unsigned_float:DF (match_operand:SI 1 "register_operand" "d")))
    (clobber (reg:SI REG_PSW))]
-  "(TRIC_HAVE_DP)"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   "utodf\t%A0, %1"
   [(set_attr "pipe" "fp2")])
 
@@ -2538,7 +2538,7 @@
   [(set (match_operand:DF 0 "register_operand"                   "=d")
         (unsigned_float:DF (match_operand:DI 1 "register_operand" "d")))
    (clobber (reg:SI REG_PSW))]
-  "(TRIC_HAVE_DP)"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   "ultodf\t%A0, %A1"
   [(set_attr "pipe" "fp2")])  
 
@@ -2551,7 +2551,7 @@
               (clobber (reg:DI REG_D0))])
    (set (match_operand:SI 0 "register_operand" "")
         (reg:SI REG_D2))]
-  ""
+  "TARGET_USE_FPU"
   {
     if (TRIC_HAVE_FTOIZ)
       {
@@ -2569,7 +2569,7 @@
               (clobber (reg:DI REG_D0))])
    (set (match_operand:SI 0 "register_operand" "")
         (reg:SI REG_D2))]
-  ""
+  "TARGET_USE_FPU"
   {
     if (TRIC_HAVE_FTOIZ)
       {
@@ -2582,7 +2582,7 @@
   [(set (match_operand:DI 0 "register_operand"         "=d")
         (fix:DI (match_operand:DF 1 "register_operand"  "d")))
    (clobber (reg:SI REG_PSW))]
-  "(TRIC_HAVE_DP)"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   "dftolz\t%A0, %A1"
   [(set_attr "pipe" "fp2")])
 
@@ -2590,7 +2590,7 @@
   [(set (match_operand:DI 0 "register_operand"                 "=d")
         (unsigned_fix:DI (match_operand:DF 1 "register_operand" "d")))
    (clobber (reg:SI REG_PSW))]
-  "(TRIC_HAVE_DP)"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   "dftoulz\t%A0, %A1"
   [(set_attr "pipe" "fp2")])
   
@@ -2598,7 +2598,7 @@
   [(set (match_operand:SI 0 "register_operand"         "=d")
         (fix:SI (match_operand:SF 1 "register_operand"  "d")))
    (clobber (reg:SI REG_PSW))]
-  "TRIC_HAVE_FTOIZ"
+  "TRIC_HAVE_FTOIZ && TARGET_USE_FPU"
   "ftoiz\t%0, %1"
   [(set_attr "pipe" "fp2")])
 
@@ -2606,7 +2606,7 @@
   [(set (match_operand:SI 0 "register_operand"                 "=d")
         (unsigned_fix:SI (match_operand:SF 1 "register_operand" "d")))
    (clobber (reg:SI REG_PSW))]
-  "TRIC_HAVE_FTOIZ"
+  "TRIC_HAVE_FTOIZ && TARGET_USE_FPU"
   "ftouz\t%0, %1"
   [(set_attr "pipe" "fp2")])
 
@@ -2615,7 +2615,7 @@
         (fix:SI (reg:SF REG_D4)))
    (clobber (reg:SI REG_A2))
    (clobber (reg:DI REG_D0))]
-  "!TRIC_HAVE_FTOIZ"
+  "!TRIC_HAVE_FTOIZ  || !TARGET_USE_FPU"
   "call\t__fixsfsi"
   [(set_attr "pipe" "ctx")])
 
@@ -2624,7 +2624,7 @@
         (unsigned_fix:SI (reg:SF REG_D4)))
    (clobber (reg:SI REG_A2))
    (clobber (reg:DI REG_D0))]
-  "!TRIC_HAVE_FTOIZ"
+  "!TRIC_HAVE_FTOIZ || !TARGET_USE_FPU"
   "call\t__fixunssfsi"
   [(set_attr "pipe" "ctx")])
 
@@ -2632,7 +2632,7 @@
   [(set (match_operand:SI 0 "register_operand"         "=d")
         (fix:SI (match_operand:DF 1 "register_operand"  "d")))
    (clobber (reg:SI REG_PSW))]
-  "TRIC_HAVE_DP"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   "dftoiz\t%0, %A1"
   [(set_attr "pipe" "fp2")])
 
@@ -2640,7 +2640,7 @@
   [(set (match_operand:SI 0 "register_operand"                 "=d")
         (unsigned_fix:SI (match_operand:DF 1 "register_operand" "d")))
    (clobber (reg:SI REG_PSW))]
-  "TRIC_HAVE_DP"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   "dftouz\t%0, %A1"
   [(set_attr "pipe" "fp2")])
 
@@ -2651,7 +2651,7 @@
                 (match_operand:SF 2 "register_operand"   "d")
                 (match_operand:SF 3 "register_operand"   "d")))
    (clobber (reg:SI REG_PSW))]
-  "!TRIC_ERRATA_076"
+  "!TRIC_ERRATA_076 && TARGET_USE_FPU"
   "madd.f\t%0, %3, %1, %2"
   [(set_attr "pipe" "fp3")])
 
@@ -2662,7 +2662,7 @@
                 (match_operand:DF 2 "register_operand"   "d")
                 (match_operand:DF 3 "register_operand"   "d")))
    (clobber (reg:SI REG_PSW))]
-  "TRIC_HAVE_DP"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   "madd.df\t%A0, %A3, %A1, %A2"
   [(set_attr "pipe" "fp3")])
 
@@ -2701,7 +2701,7 @@
                 (match_operand:SF 2 "register_operand"          "d")
                 (match_operand:SF 3 "register_operand"          "d")))
    (clobber (reg:SI REG_PSW))]
-  "!TRIC_ERRATA_076"
+  "!TRIC_ERRATA_076 && TARGET_USE_FPU"
   "msub.f\t%0, %3, %1, %2"
   [(set_attr "pipe" "fp3")])
 
@@ -2712,7 +2712,7 @@
                 (match_operand:DF 2 "register_operand"          "d")
                 (match_operand:DF 3 "register_operand"          "d")))
    (clobber (reg:SI REG_PSW))]
-  "TRIC_HAVE_DP"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   "msub.df\t%A0, %A3, %A1, %A2"
   [(set_attr "pipe" "fp3")])
 
@@ -3616,7 +3616,7 @@
 (define_insn "abssf2"
   [(set (match_operand:SF 0 "register_operand"          "=d")
         (abs:SF (match_operand:SF 1 "register_operand"   "d")))]
-  ""
+  "TARGET_USE_FPU"
   {
     static const char * asmcode[] =
     {
@@ -3635,7 +3635,7 @@
 (define_insn "absdf2"
   [(set (match_operand:DF 0 "register_operand"          "=d")
         (abs:DF (match_operand:DF 1 "register_operand"   "d")))]
-  "(TRIC_HAVE_DP)"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   "abs.df\t%A0, %A1"
   [(set_attr "pipe" "fp2")])
 
@@ -4116,7 +4116,7 @@
                                           (match_operand:SF 2 "register_operand" "")])
                       (label_ref (match_operand 3 "" ""))
                       (pc)))]
-  ""
+  "TARGET_USE_FPU"
   {
     tric_emit_cbranchsf4 (operands);
     DONE;
@@ -4129,7 +4129,7 @@
                                           (match_operand:DF 2 "register_operand" "")])
                       (label_ref (match_operand 3 "" ""))
                       (pc)))]
-  "(TRIC_HAVE_DP)"
+  "TRIC_HAVE_DP && TARGET_USE_FPU"
   {
     tric_emit_cbranchdf4 (operands);
     DONE;
