@@ -2487,6 +2487,7 @@ The following attributes are supported on most targets.
 @table @code
 @c Keep this table alphabetized by attribute name.  Treat _ as space.
 
+@item mock
 @itemx access (@var{access-mode}, @var{ref-index})
 @itemx access (@var{access-mode}, @var{ref-index}, @var{size-index})
 
