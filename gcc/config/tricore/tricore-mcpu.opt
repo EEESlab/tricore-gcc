@@ -131,16 +131,19 @@ EnumValue
 Enum(tric_mcpu) String(tc2d5d) Value(31)
 
 EnumValue
-Enum(tric_mcpu) String(tc38xx) Value(32)
+Enum(tric_mcpu) String(tc33xx) Value(32)
 
 EnumValue
-Enum(tric_mcpu) String(tc39xx) Value(33)
+Enum(tric_mcpu) String(tc38xx) Value(33)
 
 EnumValue
-Enum(tric_mcpu) String(tc49Ax) Value(34)
+Enum(tric_mcpu) String(tc39xx) Value(34)
 
 EnumValue
-Enum(tric_mcpu) String(tc4DAx) Value(35)
+Enum(tric_mcpu) String(tc49Ax) Value(35)
+
+EnumValue
+Enum(tric_mcpu) String(tc4DAx) Value(36)
 
 EnumValue
 Enum(tric_merrata) String(cpu048) Value(tric_errata_cpu048)
