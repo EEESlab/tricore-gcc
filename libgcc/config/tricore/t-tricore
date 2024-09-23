@@ -4,8 +4,6 @@ LIB1ASMFUNCS = \
 	_udivmodsi4 \
 	_rstcntxt \
 	_bswapsi2 \
-	_fixsfsi \
-	_fixunssfsi \
 	_paritysi2 \
 	_ashldi3 \
 	_ashrdi3 \
@@ -13,6 +11,11 @@ LIB1ASMFUNCS = \
 	memcpy \
 	memset \
 	memcmp
+
+ifeq (,$(findstring soft-single-float, $(MULTISUBDIR)))
+# The compiler is called without the flag -msoft-sp-float, we can add libcc function overrides which use Floating Point hardware
+LIB1ASMFUNCS += _fixsfsi _fixunssfsi
+endif
 
 
 LIB2FUNCS_EXCLUDE = \
