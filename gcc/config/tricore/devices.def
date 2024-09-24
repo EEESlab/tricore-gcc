@@ -80,4 +80,5 @@ DEF_DEVICE ("tc39xx", "0x3900", "162", "tc162") /* since v4.6.6.0 */
 DEF_DEVICE ("tc49Ax", "0x49A0", "18", "tc18")   
 DEF_DEVICE ("tc4DAx", "0x4D00", "18", "tc18")   
 DEF_DEVICE ("tc49xx", "0x4900", "18", "tc18")   
+DEF_DEVICE ("tc48xx", "0x4800", "18", "tc18")   
 DEF_DEVICE ("tc45xx", "0x4500", "18", "tc18")   
