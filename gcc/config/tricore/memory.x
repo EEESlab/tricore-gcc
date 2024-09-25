@@ -1069,10 +1069,11 @@ __CSA_SIZE = 16K;
 #define P_D_R_B   0
 #define P_D_R_S   0
 
-__USTACK_SIZE = 4K;
-__ISTACK_SIZE = 256;
-__HEAP_MIN = 8K;
-__CSA_SIZE = 16K;
+/* Values taken from TC4 iLLDs */
+__USTACK_SIZE = 2K;
+__ISTACK_SIZE = 1k;
+__HEAP_MIN = 4K;
+__CSA_SIZE = 8K;
 
 #elif __TRICORE_NAME__  == 0x4900
 #define __MESSAGE__ "Using wrong Memory Map. This Map is for TC49xx"
@@ -1088,8 +1089,6 @@ __CSA_SIZE = 16K;
 #define I_C_F_S_3 4M
 #define I_C_F_B_4 0x81000000
 #define I_C_F_S_4 4M
-#define I_C_F_B_5 0x81400000
-#define I_C_F_S_5 4M
 #define I_D_F_B   0xAE000000
 #define I_D_F_S    1M
 #define I_D_F_B_0 0xAE000000
@@ -1107,10 +1106,154 @@ __CSA_SIZE = 16K;
 #define P_D_R_B   0
 #define P_D_R_S   0
 
-__USTACK_SIZE = 4K;
-__ISTACK_SIZE = 256;
-__HEAP_MIN = 8K;
-__CSA_SIZE = 16K;
+/* Values taken from TC4 iLLDs */
+__USTACK_SIZE = 2K;
+__ISTACK_SIZE = 1k;
+__HEAP_MIN = 4K;
+__CSA_SIZE = 8K;
+
+#elif __TRICORE_NAME__  == 0x4D00
+#define __MESSAGE__ "Using wrong Memory Map. This Map is for TC4Dxx"
+#define I_C_F_B   0x80000000
+#define I_C_F_S   4M
+#define I_C_F_B_0 0x80000000
+#define I_C_F_S_0 4M
+#define I_C_F_B_1 0x80400000
+#define I_C_F_S_1 4M
+#define I_C_F_B_2 0x80800000
+#define I_C_F_S_2 2M
+#define I_C_F_B_3 0x80A00000
+#define I_C_F_S_3 4M
+#define I_C_F_B_4 0x80E00000
+#define I_C_F_S_4 4M
+#define I_C_F_B_5 0x81200000
+#define I_C_F_S_5 2M
+#define I_D_F_B   0xAE000000
+#define I_D_F_S    1M
+#define I_D_F_B_0 0xAE000000
+#define I_D_F_S_0  1M
+#define E_C_R_B   0
+#define E_C_R_S   0
+#define E_D_R_B   0
+#define E_D_R_S   0
+#define I_C_R_B   0xC0000000
+#define I_C_R_S    64K
+#define I_D_R_B   0xD0000000
+#define I_D_R_S    240K
+#define P_C_R_B   0
+#define P_C_R_S   0
+#define P_D_R_B   0
+#define P_D_R_S   0
+
+/* Values taken from TC4 iLLDs */
+__USTACK_SIZE = 2K;
+__ISTACK_SIZE = 1k;
+__HEAP_MIN = 4K;
+__CSA_SIZE = 8K;
+
+
+#elif __TRICORE_NAME__  == 0x4800
+#define __MESSAGE__ "Using wrong Memory Map. This Map is for TC48xx"
+#define I_C_F_B   0x80000000
+#define I_C_F_S   4M
+#define I_C_F_B_0 0x80000000
+#define I_C_F_S_0 4M
+#define I_C_F_B_1 0x80400000
+#define I_C_F_S_1 4M
+#define I_C_F_B_2 0x80800000
+#define I_C_F_S_2 4M
+#define I_C_F_B_3 0x80C00000
+#define I_C_F_S_3 4M
+#define I_D_F_B   0xAE000000
+#define I_D_F_S    256K
+#define I_D_F_B_0 0xAE000000
+#define I_D_F_S_0  256K
+#define E_C_R_B   0
+#define E_C_R_S   0
+#define E_D_R_B   0
+#define E_D_R_S   0
+#define I_C_R_B   0xC0000000
+#define I_C_R_S    64K
+#define I_D_R_B   0xD0000000
+#define I_D_R_S    240K
+#define P_C_R_B   0
+#define P_C_R_S   0
+#define P_D_R_B   0
+#define P_D_R_S   0
+
+/* Values taken from TC4 iLLDs */
+__USTACK_SIZE = 2K;
+__ISTACK_SIZE = 1k;
+__HEAP_MIN = 4K;
+__CSA_SIZE = 8K;
+
+
+#elif __TRICORE_NAME__  == 0x4600
+#define __MESSAGE__ "Using wrong Memory Map. This Map is for TC46xx"
+#define I_C_F_B   0x80000000
+#define I_C_F_S   4M
+#define I_C_F_B_0 0x80000000
+#define I_C_F_S_0 4M
+#define I_C_F_B_1 0x80400000
+#define I_C_F_S_1 4M
+#define I_C_F_B_2 0x80800000
+#define I_C_F_S_2 2M
+#define I_C_F_B_3 0x80A00000
+#define I_C_F_S_3 2M
+#define I_D_F_B   0xAE000000
+#define I_D_F_S    512K
+#define I_D_F_B_0 0xAE000000
+#define I_D_F_S_0  512K
+#define E_C_R_B   0
+#define E_C_R_S   0
+#define E_D_R_B   0
+#define E_D_R_S   0
+#define I_C_R_B   0xC0000000
+#define I_C_R_S    64K
+#define I_D_R_B   0xD0000000
+#define I_D_R_S    240K
+#define P_C_R_B   0
+#define P_C_R_S   0
+#define P_D_R_B   0
+#define P_D_R_S   0
+
+/* Values taken from TC4 iLLDs */
+__USTACK_SIZE = 2K;
+__ISTACK_SIZE = 1k;
+__HEAP_MIN = 4K;
+__CSA_SIZE = 8K;
+
+
+#elif __TRICORE_NAME__  == 0x4500
+#define __MESSAGE__ "Using wrong Memory Map. This Map is for TC45xx"
+#define I_C_F_B   0x80000000
+#define I_C_F_S   2M
+#define I_C_F_B_0 0x80000000
+#define I_C_F_S_0 2M
+#define I_C_F_B_1 0x80200000
+#define I_C_F_S_1 2M
+#define I_D_F_B   0xAE000000
+#define I_D_F_S    64K
+#define I_D_F_B_0 0xAE000000
+#define I_D_F_S_0  64K
+#define E_C_R_B   0
+#define E_C_R_S   0
+#define E_D_R_B   0
+#define E_D_R_S   0
+#define I_C_R_B   0xC0000000
+#define I_C_R_S    32K
+#define I_D_R_B   0xD0000000
+#define I_D_R_S    240K
+#define P_C_R_B   0
+#define P_C_R_S   0
+#define P_D_R_B   0
+#define P_D_R_S   0
+
+/* Values taken from TC4 iLLDs */
+__USTACK_SIZE = 2K;
+__ISTACK_SIZE = 1k;
+__HEAP_MIN = 4K;
+__CSA_SIZE = 8K;
 
 #endif
 
