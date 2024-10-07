@@ -913,6 +913,9 @@ typedef struct GTY(()) tric_section
 
 #define INIT_EXPANDERS tric_init_expanders()
 
+#define SP_FPU_ENABLED (!TARGET_SP_SOFT_FLOAT)
+#define DP_FPU_ENABLED (!TARGET_DP_SOFT_FLOAT)
+
 /* Helper functions for late backend optimizations */
 bool copy_constant_string (rtx_insn *, rtx *);
 bool remove_strcmp (rtx_insn *, rtx *);

@@ -5370,7 +5370,7 @@ tric_option_override (void)
       flag_finite_math_only = 1;
     }
 
-  if (flag_pic)
+  if (flag_pic == 1 || flag_pic == 2)
     error ("%qs: position independent code is not supported for "
            "this machine, try %qs", "-fpic", "-mcode-pic");
 

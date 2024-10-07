@@ -43,12 +43,20 @@ install-devices: installdirs $(MEMORY_CPU) $(CRT0_CPU) $(CRT0_S) crti.S crtn.S
 	$(INSTALL_DATA) crt0-tc1x.S $(DESTDIR)$(libsubdir)
 	$(INSTALL_DATA) crt0-tc2x.S $(DESTDIR)$(libsubdir)
 
-MULTILIB_OPTIONS = mtc131/mtc16/mtc161/mtc162/mtc18 fshort-double
-MULTILIB_DIRNAMES = tc131 tc16 tc161 tc162 tc18 short-double
+MULTILIB_OPTIONS = mtc131/mtc16/mtc161/mtc162/mtc18 fshort-double msoft-sp-float msoft-dp-float
+MULTILIB_DIRNAMES = tc131 tc16 tc161 tc162 tc18 short-double soft-single-float soft-double-float
 #MULTILIB_OPTIONS = mtc161 fshort-double
 #MULTILIB_DIRNAMES = tc161 short-double
 
 MULTILIB_EXCEPTIONS = 
+# a library with msoft-sp-float without any device specified is not interesting
+MULTILIB_EXCEPTIONS += msoft-sp-float*
+# a library with msoft-dp-float without any device specified is not interesting
+MULTILIB_EXCEPTIONS += msoft-dp-float*
+# msoft-dp-float makes no sense for tc131, which doesn't have a dp float hardware to disable
+MULTILIB_EXCEPTIONS += mtc131/msoft-dp-float
+# msoft-dp-float makes no sense for tc16*, which doesn't have a dp float hardware to disable
+MULTILIB_EXCEPTIONS += mtc16*/msoft-dp-float
 
 # MULTILIB_MATCHES                                                                                                            
 # TRIC_DEVICES
