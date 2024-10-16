@@ -221,3 +221,19 @@ Perform strcmp asm replacements optimization as builtin, default is on greater/e
 mstrcmp-imm=
 Target Joined UInteger Var(tric_opt_flag_strcmp_imm) Init(0) 
 Perform strcmp imm replacements, strcmp full replacement, default is on in greater/equal -O3.
+
+msoft-sp-float
+Target RejectNegative Mask(SP_SOFT_FLOAT)
+Inhibit the use of hardware single precision floating point instructions.
+
+mhard-sp-float
+Target RejectNegative InverseMask(SP_SOFT_FLOAT)
+Enable hardware single precision floating point instructions.
+
+msoft-dp-float
+Target RejectNegative Mask(DP_SOFT_FLOAT)
+Inhibit the use of hardware double precision floating point instructions.
+
+mhard-dp-float
+Target RejectNegative InverseMask(DP_SOFT_FLOAT)
+Enable hardware double precision floating point instructions.
