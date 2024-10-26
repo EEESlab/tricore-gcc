@@ -998,6 +998,34 @@ __ISTACK_SIZE = 256;
 __HEAP_MIN = 8K;
 __CSA_SIZE = 16K;
 
+#elif __TRICORE_NAME__  == 0x3300
+#define __MESSAGE__ "Using wrong Memory Map. This Map is for TC33xx"
+#define I_C_F_B	  0x80000000
+#define I_C_F_S	  2M
+#define I_C_F_B_0 0x80000000
+#define I_C_F_S_0 2M
+#define I_D_F_B   0xaf000000
+#define I_D_F_S	   128K
+#define I_D_F_B_0 0xaf000000
+#define I_D_F_S_0  128K
+#define E_C_R_B	  0
+#define E_C_R_S	  0
+#define E_D_R_B	  0
+#define E_D_R_S	  0
+#define I_C_R_B	  0xc0000000
+#define I_C_R_S	   8K
+#define I_D_R_B	  0xd0000000
+#define I_D_R_S	   192K
+#define P_C_R_B	  0
+#define P_C_R_S	  0
+#define P_D_R_B	  0
+#define P_D_R_S	  0
+
+__USTACK_SIZE = 4K;
+__ISTACK_SIZE = 256;
+__HEAP_MIN = 8K;
+__CSA_SIZE = 16K;
+
 #elif __TRICORE_NAME__  == 0x3900
 #define __MESSAGE__ "Using wrong Memory Map. This Map is for TC39xx"
 #define I_C_F_B	  0x80000000
