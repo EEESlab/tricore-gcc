@@ -2616,7 +2616,7 @@
         (fix:SI (reg:SF REG_D4)))
    (clobber (reg:SI REG_A2))
    (clobber (reg:DI REG_D0))]
-  "!TRIC_HAVE_FTOIZ && SP_FPU_ENABLED"
+  "!TRIC_HAVE_FTOIZ"
   "call\t__fixsfsi"
   [(set_attr "pipe" "ctx")])
 
@@ -2625,7 +2625,7 @@
         (unsigned_fix:SI (reg:SF REG_D4)))
    (clobber (reg:SI REG_A2))
    (clobber (reg:DI REG_D0))]
-  "!TRIC_HAVE_FTOIZ && SP_FPU_ENABLED"
+  "!TRIC_HAVE_FTOIZ"
   "call\t__fixunssfsi"
   [(set_attr "pipe" "ctx")])
 

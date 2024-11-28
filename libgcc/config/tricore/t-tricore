@@ -12,16 +12,15 @@ LIB1ASMFUNCS = \
 	memset \
 	memcmp
 
+LIB2FUNCS_EXCLUDE = \
+        _divdi3 _moddi3 _divmoddi4 \
+        _udivdi3 _umoddi3 _udivmoddi4 _clzsi2
+
 ifeq (,$(findstring soft-single-float, $(MULTISUBDIR)))
 # The compiler is called without the flag -msoft-sp-float, we can add libcc function overrides which use Floating Point hardware
 LIB1ASMFUNCS += _fixsfsi _fixunssfsi
+LIB2FUNCS_EXCLUDE +=  _sf_to_si _sf_to_usi
 endif
-
-
-LIB2FUNCS_EXCLUDE = \
-        _divdi3 _moddi3 _divmoddi4 \
-        _udivdi3 _umoddi3 _udivmoddi4 _clzsi2 \
-        _sf_to_si _sf_to_usi
 
 LIB2ADD += \
     $(srcdir)/config/tricore/sincosl.c \
