@@ -376,13 +376,15 @@ static void tric_print_operand (FILE*, rtx, int);
 
 static rtx tric_arith_CONST_INT (rtx, rtx, rtx, rtx);
 
-static const char *callinfo_label[10000];
-static unsigned int callinfo_regsused[10000];
-static unsigned int callinfo_argsused[10000];
-static unsigned int callinfo_retsused[10000];
-static unsigned int callinfo_statused[10000];
-static int len_callinfo;
-
+/* Callinfo data structures */
+static const char **callinfo_label = NULL;
+static unsigned int *callinfo_regsused = NULL;
+static unsigned int *callinfo_argsused = NULL;
+static unsigned int *callinfo_retsused = NULL;
+static unsigned int *callinfo_statused = NULL;
+static int len_callinfo = 0; // Current length
+static int dim_callinfo = 0; // Capacity (using dynamic allocation)
+
 /***********************************************************************
  ** Miscellaneous Support Functions
  ***********************************************************************/
@@ -2958,6 +2960,17 @@ tric_asm_function_prologue(FILE *file ATTRIBUTE_UNUSED)
   for (regno = REG_D0; regno <= REG_A15; regno++)
     if (df_regs_ever_live_p(regno))
       mask |= (1 << regno);
+  
+  /* Dinamically allocate the callinfo data structures (initial size = 128) */
+  if (!dim_callinfo)
+  {
+    dim_callinfo = 128;
+    callinfo_label = (const char **) xmalloc(dim_callinfo * sizeof(const char *));
+    callinfo_argsused = (unsigned int *) xmalloc(dim_callinfo * sizeof(unsigned int));
+    callinfo_regsused = (unsigned int *) xmalloc(dim_callinfo * sizeof(unsigned int));
+    callinfo_retsused = (unsigned int *) xmalloc(dim_callinfo * sizeof(unsigned int));
+    callinfo_statused = (unsigned int *) xmalloc(dim_callinfo * sizeof(unsigned int));
+  }
 
   /* Fill up the callinfo data structure used for fcall/fret late link optimization */
   callinfo_label[len_callinfo] = get_fnname_from_decl(current_function_decl);
@@ -3295,7 +3308,18 @@ void tric_asm_output_end_function(FILE *file, const char *fnname, tree decl ATTR
         }
         assemble_name(file, fnname);
         fputs("_end:\n", file);
+	/* Increase the length of the callinfo data structures */
         len_callinfo += 1;
+	/* After increasing len_callinfo, check if more space is needed in the data structures */
+        if (len_callinfo == dim_callinfo)
+        {
+          dim_callinfo *= 2;
+          callinfo_label = (const char **) xrealloc(callinfo_label, dim_callinfo * sizeof(const char *));
+          callinfo_argsused = (unsigned int *) xrealloc(callinfo_argsused, dim_callinfo * sizeof(unsigned int));
+	  callinfo_regsused = (unsigned int *) xrealloc(callinfo_regsused, dim_callinfo * sizeof(unsigned int));
+          callinfo_retsused = (unsigned int *) xrealloc(callinfo_retsused, dim_callinfo * sizeof(unsigned int));
+          callinfo_statused = (unsigned int *) xrealloc(callinfo_statused, dim_callinfo * sizeof(unsigned int));
+        }
       }
     }
 }
