@@ -161,6 +161,9 @@ EnumValue
 Enum(tric_mcpu) String(tc4Zxx) Value(40)
 
 EnumValue
+Enum(tric_mcpu) String(tc44xx) Value(41)
+
+EnumValue
 Enum(tric_merrata) String(cpu048) Value(tric_errata_cpu048)
 
 EnumValue

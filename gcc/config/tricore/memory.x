@@ -1283,6 +1283,39 @@ __ISTACK_SIZE = 1k;
 __HEAP_MIN = 4K;
 __CSA_SIZE = 8K;
 
+#elif __TRICORE_NAME__  == 0x4400
+#define __MESSAGE__ "Using wrong Memory Map. This Map is for TC44xx"
+#define I_C_F_B   0x80000000
+#define I_C_F_S   4M
+#define I_C_F_B_0 0x80000000
+#define I_C_F_S_0 4M
+#define I_C_F_B_1 0x80400000
+#define I_C_F_S_1 2M
+#define I_C_F_B_2 0x80600000
+#define I_C_F_S_2 2M
+#define I_D_F_B   0xAE000000
+#define I_D_F_S    256K
+#define I_D_F_B_0 0xAE000000
+#define I_D_F_S_0  256K
+#define E_C_R_B   0
+#define E_C_R_S   0
+#define E_D_R_B   0
+#define E_D_R_S   0
+#define I_C_R_B   0xC0000000
+#define I_C_R_S    64K
+#define I_D_R_B   0xD0000000
+#define I_D_R_S    240K
+#define P_C_R_B   0
+#define P_C_R_S   0
+#define P_D_R_B   0
+#define P_D_R_S   0
+
+/* Values taken from TC4 iLLDs */
+__USTACK_SIZE = 2K;
+__ISTACK_SIZE = 1k;
+__HEAP_MIN = 4K;
+__CSA_SIZE = 8K;
+
 #elif __TRICORE_NAME__  == 0x4F00
 #define __MESSAGE__ "Using wrong Memory Map. This Map is for TC4Zxx"
 #define I_C_F_B   0x80000000
