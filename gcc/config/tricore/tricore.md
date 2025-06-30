@@ -699,8 +699,7 @@
     addsc.a\t%0, %2, %1, 0
     addsc.a\t%0, %2, %1, 0
     addsc.a\t%0, %2, %1, 0"
-  [(set_attr "opt" "*,*,*,*,*,*,speed,size,*,*,*,speed,size,*,*,speed,size,*,speed,size,*")
-   (set_attr "pipe" "ip,ip,ip,ip,ip,ip,ip,ip,aalu,aalu,aalu,aalu,aalu,aalu,aalu,mixds,mixds,mixds,mixds,mixds,mixds")
+  [(set_attr "pipe" "ip,ip,ip,ip,ip,ip,ip,ip,aalu,aalu,aalu,aalu,aalu,aalu,aalu,mixds,mixds,mixds,mixds,mixds,mixds")
    (set_attr "adjust" "add32")])
 
 (define_insn "*addsi3"
