@@ -5394,7 +5394,7 @@ tric_option_override (void)
       flag_finite_math_only = 1;
     }
 
-  if (flag_pic)
+  if (flag_pic == 1 || flag_pic == 2)
     error ("%qs: position independent code is not supported for "
            "this machine, try %qs", "-fpic", "-mcode-pic");
 
@@ -10154,6 +10154,8 @@ tric_eabi_round_type_align (tree type, unsigned computed, unsigned specified)
 unsigned
 tric_eabi_data_alignment (tree type, unsigned basic_align)
 {
+  if(tric_opt_force_align_arrays == 0) return basic_align;
+  
   unsigned best_align = BITS_PER_WORD;
   if (TREE_CODE (type) == ARRAY_TYPE)
   {

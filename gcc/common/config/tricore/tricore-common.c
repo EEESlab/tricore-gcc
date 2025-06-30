@@ -137,12 +137,24 @@ tric_opt_error (int value, const char *op1, const char *op2, location_t loc)
 }
 
 
-
+/*
+  Configures options for the specific devices. For example, tc45xx shall have soft double precision hardware by default
+*/
+void tric_configure_options_for_device(const char *name, struct gcc_options *opts)
+{
+  const char* tc45xx = "tc45xx";
+  if(name 
+    && 0 == strcmp (name, tc45xx)) 
+  {
+    //By default, tc45xx shall have soft double precision operations
+    opts->x_target_flags |= MASK_DP_SOFT_FLOAT;
+  }
+}
 
 /* Implement `TARGET_HANDLE_OPTION'  */
 
 static bool
-tric_handle_option (struct gcc_options *opts ATTRIBUTE_UNUSED,
+tric_handle_option (struct gcc_options *opts,
                     struct gcc_options *opts_set ATTRIBUTE_UNUSED,
                     const struct cl_decoded_option *decoded, location_t loc)
 {
@@ -237,6 +249,7 @@ tric_handle_option (struct gcc_options *opts ATTRIBUTE_UNUSED,
 
     case OPT_mcpu_:
       tric_set_device (arg);
+      tric_configure_options_for_device(arg, opts);
       return true;
       
     case OPT_mtc:
