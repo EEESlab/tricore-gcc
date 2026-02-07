@@ -148,6 +148,10 @@ case "${target}" in
 	tmake_file="t-aix"
 	;;
 
+  tricore-*-elf*)
+	config_path="tricore"
+	;;
+
   *-*-linux* | *-*-gnu* | *-*-k*bsd*-gnu \
   | *-*-netbsd* | *-*-freebsd* | *-*-openbsd* | *-*-dragonfly* \
   | *-*-solaris2* | *-*-sysv4* | *-*-irix6* | *-*-osf* | *-*-hpux11* \
