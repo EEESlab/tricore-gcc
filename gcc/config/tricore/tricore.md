@@ -82,6 +82,7 @@
    UNSPECV_NOP
    UNSPECV_SWAP_W
    UNSPECV_SWAPMSK_W
+   UNSPECV_DSYNC
    ])
 
 
@@ -5212,9 +5213,8 @@ skip_loop:;
   ""
   [(set_attr "length" "0")])
 
-
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(include "tricore-atomics.md")
 (include "tricore-combine.md")
 (include "tricore-map.md")

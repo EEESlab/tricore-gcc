@@ -55,6 +55,39 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
    are call(ee) saved. */
 #define UPPER_CTX_MASK 0xfc00ff00
 
+/* GCC C11 atomic lock-free capability macros
+   Meaning: 0 = never; 1 = sometimes; 2 = always */
+#ifndef __GCC_ATOMIC_BOOL_LOCK_FREE
+#define __GCC_ATOMIC_BOOL_LOCK_FREE      2
+#endif
+#ifndef __GCC_ATOMIC_CHAR_LOCK_FREE
+#define __GCC_ATOMIC_CHAR_LOCK_FREE      2
+#endif
+#ifndef __GCC_ATOMIC_CHAR16_T_LOCK_FREE
+#define __GCC_ATOMIC_CHAR16_T_LOCK_FREE  2
+#endif
+#ifndef __GCC_ATOMIC_CHAR32_T_LOCK_FREE
+#define __GCC_ATOMIC_CHAR32_T_LOCK_FREE  2
+#endif
+#ifndef __GCC_ATOMIC_WCHAR_T_LOCK_FREE
+#define __GCC_ATOMIC_WCHAR_T_LOCK_FREE   2
+#endif
+#ifndef __GCC_ATOMIC_SHORT_LOCK_FREE
+#define __GCC_ATOMIC_SHORT_LOCK_FREE     2
+#endif
+#ifndef __GCC_ATOMIC_INT_LOCK_FREE
+#define __GCC_ATOMIC_INT_LOCK_FREE       2
+#endif
+#ifndef __GCC_ATOMIC_LONG_LOCK_FREE
+#define __GCC_ATOMIC_LONG_LOCK_FREE      2
+#endif
+#ifndef __GCC_ATOMIC_LLONG_LOCK_FREE
+#define __GCC_ATOMIC_LLONG_LOCK_FREE     1
+#endif
+#ifndef __GCC_ATOMIC_POINTER_LOCK_FREE
+#define __GCC_ATOMIC_POINTER_LOCK_FREE   2
+#endif
+
 
 /***********************************************************************/
 /* Specs */

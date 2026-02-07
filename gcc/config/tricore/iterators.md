@@ -185,3 +185,14 @@
 (define_code_attr signed_prefix_su
   [(sign_extend "s")
    (zero_extend "u")])
+
+(define_code_iterator atomic_op [plus minus and ior xor])
+
+(define_code_attr atomic_op_name
+  [(plus  "add")
+   (minus "sub")
+   (and   "and")
+   (ior   "ior")
+   (xor   "xor")])
+
+
