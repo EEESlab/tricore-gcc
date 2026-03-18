@@ -165,7 +165,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     struct atomic<_Tp*>;
 
     /* The target's "set" value for test-and-set may not be exactly 1.  */
-#if __GCC_ATOMIC_TEST_AND_SET_TRUEVAL == 1
+#if defined(__TRICORE__)
+    typedef int __atomic_flag_data_type;
+#elif __GCC_ATOMIC_TEST_AND_SET_TRUEVAL == 1
     typedef bool __atomic_flag_data_type;
 #else
     typedef unsigned char __atomic_flag_data_type;
