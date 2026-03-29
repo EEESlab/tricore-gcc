@@ -19,6 +19,7 @@
 
 .deps
 .libs
+.vscode
 
 autom4te.cache
 config.cache
