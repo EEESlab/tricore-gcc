@@ -102,7 +102,6 @@ tric_self_specs (int argc, const char **argv)
   int i;
 
   /* We need device / core information for errata defaults.  */
-
   for (i = 0; i < argc; i++)
     {
       if (0 == strncmp (argv[i], "mcpu=", strlen ("mcpu=")))
@@ -127,6 +126,13 @@ tric_self_specs (int argc, const char **argv)
   spec = reconcat (spec, spec, " %<m" #ARG, " %<mno-" #ARG, NULL);
 #include "errata.def"
 #undef DEF_ERRATA
+
+  //Add software double precision automatically, if device doesn't have DP hardware
+  if(tric_device && tric_device_defaults_soft_dp_float(tric_device->name))
+      spec = reconcat (spec, spec, 
+          " %{!mhard-dp-float:%{!msoft-dp-float:-msoft-dp-float}} ",
+          NULL);
+
 
   return spec;
 }
