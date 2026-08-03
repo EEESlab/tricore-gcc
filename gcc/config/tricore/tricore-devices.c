@@ -60,6 +60,13 @@ const tric_device_t tric_devices[] =
   };
 
 
+int
+tric_device_defaults_soft_dp_float (const char *name)
+{
+  return name && STREQ (name, "tc45xx"); //tc45xx has NO hardware DP hardware. Default to soft dp
+}
+
+
 /* Set tric_core according to NAME.  NAME is something that follows -mtc
    like "13", "161", etc.  */
 

@@ -98,6 +98,9 @@ extern const tric_device_t *tric_device;
 extern void tric_set_core (const char*);
 extern void tric_set_device (const char*);
 
+/* Non-zero if device has no HW double-precision FPU and. */
+extern int tric_device_defaults_soft_dp_float (const char *name);
+
 /***********************************************************************/
 /* Convenient macros for core / device specific stuff.
    Used in machine description etc.  */
