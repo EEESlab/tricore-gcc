@@ -9343,8 +9343,12 @@ tric_asm_select_section (tree decl, int reloc,
     }
   else if (TREE_CODE (decl) == CONSTRUCTOR)
     {
+      /* Do not test TREE_READONLY on a CONSTRUCTOR: that flag is only
+         meaningful for decls and is never set here, so the old condition
+         could never select the readonly section and constant initializer
+         templates (e.g. local aggregate initializers) always landed in
+         writable .data.  Match the stock GCC categorize logic instead.  */
       if (! ((flag_pic && reloc)
-             || !TREE_READONLY (decl)
              || TREE_SIDE_EFFECTS (decl)
              || !TREE_CONSTANT (decl)))
         sec = readonly_data_section;
